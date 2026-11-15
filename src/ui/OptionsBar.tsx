@@ -44,7 +44,20 @@ export function OptionsBar() {
   let body: React.ReactNode = null;
   if (ts.transform && d) {
     const tr = ts.transform;
-    body = (<>
+    if (tr.pins) body = (<>
+      <Seg value={tr.puppetMode!} onChange={(m) => { tr.puppetMode = m; refreshTransform(d); app.emit(); }} options={[['rigid', 'Rigid'], ['normal', 'Normal'], ['distort', 'Distort']]} />
+      <Check label="Show Mesh" value={!!tr.showMesh} onChange={(v) => { tr.showMesh = v; app.emit(); }} />
+      <button className="btn sm" onClick={() => { tr.pins = []; refreshTransform(d); app.emit(); }}>Remove All Pins</button>
+      <span className="hint">{tr.pins.length} pins. Click to add a pin, drag a pin to bend, Alt+click a pin to remove it.</span>
+      <Commit onOk={() => commitTransform(d)} onCancel={() => cancelTransform(d)} />
+    </>);
+    else if (tr.plane) body = (<>
+      <Seg value={tr.phase!} onChange={(m) => { tr.phase = m; refreshTransform(d); app.emit(); }} options={[['layout', 'Layout'], ['warp', 'Warp']]} />
+      {tr.phase === 'warp' && <button className="btn sm" onClick={() => { const q = tr.plane!.dst; const sx = (q[0].x + q[3].x) / 2, ex = (q[1].x + q[2].x) / 2, sy = (q[0].y + q[1].y) / 2, ey = (q[3].y + q[2].y) / 2; tr.plane!.dst = [{ x: sx, y: sy }, { x: ex, y: sy }, { x: ex, y: ey }, { x: sx, y: ey }]; refreshTransform(d); app.emit(); }}>Straighten</button>}
+      <span className="hint">{tr.phase === 'layout' ? 'Drag the corners onto a flat surface in the photo (a wall, a floor, a building face), then switch to Warp.' : 'Drag the corners to change the perspective of that surface.'}</span>
+      <Commit onOk={() => commitTransform(d)} onCancel={() => cancelTransform(d)} />
+    </>);
+    else body = (<>
       <Seg value={tr.mode} onChange={(m) => { if (m === 'warp' && !tr.warp) { const { patchFromRect } = TRM; tr.warp = patchFromRect(tr.rect); } else if (m !== 'warp') tr.warp = null; tr.mode = m; app.emit(); }} options={[['free', 'Free'], ['skew', 'Skew'], ['distort', 'Distort'], ['perspective', 'Perspective'], ['warp', 'Warp']]} />
       {tr.warp && <Select label="Warp" value="custom" options={TRM.WARP_PRESETS.map((w) => [w, w[0].toUpperCase() + w.slice(1)] as [string, string])} onChange={(s) => { tr.warp = s === 'custom' ? TRM.patchFromRect(tr.rect) : TRM.warpPreset(tr.rect, s, 50); refreshTransform(d); app.emit(); }} />}
       <button className="btn sm" onClick={() => transformBy(d, 'rot90')}>Rotate 90° CW</button>

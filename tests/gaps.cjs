@@ -72,6 +72,49 @@ const only = process.argv[2];
     ok(sh.includes('"start":6') && sh.includes('"end":9'), 'styles move with the text when it is edited ' + sh);
     await p.screenshot({ path: 'tests/shots/gap-type.png' });
   }
+  if (!only || only === 'warp') {
+    // a striped layer to warp
+    const setup = async () => ev(async () => { await window.__monsoonRun('new', { name: 'W', w: 600, h: 400, bg: 'white' }); await window.__monsoonRun('newLayer'); const a = window.__monsoon, d = a.doc, l = d.active; const x = d.editable(l).getContext('2d'); for (let i = 0; i < 10; i++) { x.fillStyle = i % 2 ? '#0a0' : '#00f'; x.fillRect(100 + i * 40, 100, 40, 200); } l.ver++; d.commit('stripes'); a.emit(); });
+    await setup();
+    await ev(() => window.__monsoonRun('freeTransform', 'puppet'));
+    const hasPins = await ev(() => Array.isArray(window.__monsoonTS?.transform?.pins) || !!document.querySelector('.optionsbar, .options')?.textContent.includes('pins'));
+    ok(hasPins, 'puppet warp started');
+    for (const pt of [[120, 120], [480, 120], [120, 280]]) { const s = await toScreen(...pt); await p.mouse.click(s.x, s.y); }
+    await drag([[480, 280], [480, 360]]);
+    const before = await px(470, 340);
+    await p.keyboard.press('Enter');
+    const pw = await ev(() => { const d = window.__monsoon.doc; return { label: d.history[d.hIndex].label, l: d.active.y + d.active.canvas.height }; });
+    ok(pw.label === 'Puppet Warp' && pw.l > 330, 'puppet warp pulls a corner down ' + JSON.stringify(pw));
+    ok(before[3] === 255 && before[2] + before[1] > 100 && !(before[0] > 240 && before[1] > 240), 'warped pixels land under the dragged pin ' + JSON.stringify(before));
+    const fixed = await px(130, 130); ok(fixed[2] > 200 && fixed[0] < 40, 'pinned corner stays put ' + JSON.stringify(fixed));
+    await p.screenshot({ path: 'tests/shots/gap-puppet.png' });
+
+    await setup();
+    await ev(() => window.__monsoonRun('freeTransform', 'pwarp'));
+    await drag([[100, 100], [140, 120]]);
+    let pl = await ev(() => { const t = window.__monsoonTS?.transform; return t ? t.plane.src[0] : null; });
+    ok(pl && Math.abs(pl.x - 140) < 3, 'perspective warp layout corner moved ' + JSON.stringify(pl));
+    await ev(() => { const t = window.__monsoonTS.transform; t.phase = 'warp'; window.__monsoon.emit(); });
+    await drag([[500, 300], [560, 380]]);
+    await p.keyboard.press('Enter');
+    const pv = await ev(() => { const d = window.__monsoon.doc, l = d.active; return { label: d.history[d.hIndex].label, r: l.x + l.canvas.width, b: l.y + l.canvas.height }; });
+    ok(pv.label === 'Perspective Warp' && pv.r > 530 && pv.b > 340, 'perspective warp stretches the plane ' + JSON.stringify(pv));
+    await p.screenshot({ path: 'tests/shots/gap-pwarp.png' });
+
+    // content-aware scale: a red square in the middle of noise-free background should keep its width
+    await ev(async () => { await window.__monsoonRun('new', { name: 'C', w: 400, h: 200, bg: 'white' }); await window.__monsoonRun('newLayer'); const a = window.__monsoon, d = a.doc, l = d.active; const x = d.editable(l).getContext('2d'); x.fillStyle = '#ddeeff'; x.fillRect(0, 0, 400, 200); x.fillStyle = '#d00'; x.fillRect(170, 60, 60, 60); for (let i = 0; i < 400; i += 8) { x.fillStyle = '#9ab'; x.fillRect(i, 190, 4, 10); } l.ver++; d.commit('scene'); a.emit(); });
+    const t0 = Date.now();
+    await ev(() => window.__monsoonRun('contentAwareScale', { w: 260, h: 200 }));
+    const cs = await ev(() => { const d = window.__monsoon.doc, l = d.active, c = l.canvas, dd = c.getContext('2d').getImageData(0, 90, c.width, 1).data; let red = 0; for (let i = 0; i < dd.length; i += 4) if (dd[i] > 180 && dd[i + 1] < 50) red++; return { w: c.width, h: c.height, red, label: d.history[d.hIndex].label }; });
+    ok(cs.w === 260 && cs.h === 200 && cs.red >= 56, 'content-aware scale narrows the layer but keeps the red square ' + JSON.stringify(cs) + ' in ' + (Date.now() - t0) + ' ms');
+    await ev(() => window.__monsoonRun('contentAwareScale', { w: 360, h: 260 }));
+    const cs2 = await ev(() => { const l = window.__monsoon.doc.active; return [l.canvas.width, l.canvas.height]; });
+    ok(cs2[0] === 360 && cs2[1] === 260, 'content-aware scale can enlarge ' + JSON.stringify(cs2));
+    await ev(() => window.__monsoon.openDialog('cas')); await p.waitForTimeout(800);
+    ok(await p.locator('.modal').count() > 0, 'Content-Aware Scale dialog opens');
+    await p.screenshot({ path: 'tests/shots/gap-cas.png' });
+    await ev(() => window.__monsoon.closeDialog());
+  }
   globalThis.__extra && await globalThis.__extra(p, ev, ok, toScreen, drag, px);
   console.log(errs.length ? 'ERRORS:\n' + errs.join('\n') : 'no page errors');
   console.log(fails.length ? fails.length + ' FAILED' : 'ALL PASSED');

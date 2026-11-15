@@ -12,6 +12,7 @@ import { healBlend, inpaint, redEye } from './engine/heal';
 import { commands, cropDoc, offsetLayer, run } from './cmds';
 import * as V from './engine/vector';
 import { renderQuad, Quad, meshWarp, bezierPatch, patchFromRect } from './engine/transform';
+import * as DF from './engine/deform';
 import { drawBlended } from './engine/blend';
 
 export interface ViewApi {
@@ -343,7 +344,8 @@ function snapRect(d: Doc, r: Rect, v: ViewApi): Pt {
 
 // ---------- free transform ----------
 export interface TransformSession {
-  mode: 'free' | 'warp' | 'perspective' | 'distort' | 'skew'; target: 'layer' | 'selection';
+  mode: 'free' | 'warp' | 'perspective' | 'distort' | 'skew' | 'puppet' | 'pwarp'; target: 'layer' | 'selection';
+  pins?: DF.Pin[]; puppetMode?: DF.PuppetMode; showMesh?: boolean; plane?: { src: Quad; dst: Quad }; phase?: 'layout' | 'warp';
   layer: Layer | null; orig: { canvas: Canvas; x: number; y: number } | null; origLayer: Layer | null;
   rect: Rect; quad: Quad; warp: Pt[] | null; handle: string | null; start: any; origSel: Canvas | null;
 }
@@ -365,8 +367,11 @@ export function startTransform(d: Doc, mode: TransformSession['mode'] = 'free', 
     else rect = layerBounds(d, layer);
   }
   if (!rect) return;
+  if ((mode === 'puppet' || mode === 'pwarp') && (target !== 'layer' || layer?.kind !== 'raster' || !orig)) { app.toast(`${mode === 'puppet' ? 'Puppet Warp' : 'Perspective Warp'} works on pixel layers. Rasterize the layer first.`); return; }
   const quad: Quad = layer?.kind === 'smart' ? layer.smart!.quad.map((p) => ({ ...p })) as Quad : [{ x: rect.x, y: rect.y }, { x: rect.x + rect.w, y: rect.y }, { x: rect.x + rect.w, y: rect.y + rect.h }, { x: rect.x, y: rect.y + rect.h }];
   ts.transform = { mode, target, layer, orig, origLayer: layer ? JSON.parse(JSON.stringify({ ...layer, canvas: null, mask: null, smart: layer.smart ? { ...layer.smart, source: null } : undefined })) : null, rect, quad, warp: mode === 'warp' ? patchFromRect(rect) : null, handle: null, start: null, origSel: d.s.selection };
+  if (mode === 'puppet') Object.assign(ts.transform, { pins: [], puppetMode: 'rigid', showMesh: true });
+  if (mode === 'pwarp') Object.assign(ts.transform, { plane: { src: quad.map((p) => ({ ...p })) as Quad, dst: quad.map((p) => ({ ...p })) as Quad }, phase: 'layout' });
   app.emit();
 }
 function alphaAsGray(c: Canvas) { const d = getData(c), o = new ImageData(c.width, c.height); for (let i = 0; i < d.data.length; i += 4) { o.data[i] = o.data[i + 1] = o.data[i + 2] = d.data[i + 3]; o.data[i + 3] = 255; } const m = makeCanvas(c.width, c.height); ctx2d(m).putImageData(o, 0, 0); return m; }
@@ -382,7 +387,8 @@ function applyTransformPreview(d: Doc, v: ViewApi | null) {
     const r = t.warp ? warpRender(src, t.warp) : renderQuad(src, q); const m = Sel.blankMask(d.w, d.h); ctx2d(m).drawImage(r.canvas, r.x, r.y); d.s.selection = m;
   } else {
     const l = t.layer!;
-    if (l.kind === 'raster' && t.orig) { const r = t.warp ? warpRender(t.orig.canvas, t.warp) : renderQuad(t.orig.canvas, q); l.canvas = r.canvas; l.x = r.x; l.y = r.y; }
+    if (l.kind === 'raster' && t.orig && (t.pins || t.plane)) { const r = DF.deformRender(t.orig.canvas, t.rect, deformMap(t)); l.canvas = r.canvas; l.x = r.x; l.y = r.y; }
+    else if (l.kind === 'raster' && t.orig) { const r = t.warp ? warpRender(t.orig.canvas, t.warp) : renderQuad(t.orig.canvas, q); l.canvas = r.canvas; l.x = r.x; l.y = r.y; }
     else if (l.kind === 'smart') { if (!t.warp) l.smart!.quad = q.map((p) => ({ ...p })) as Quad; }
     else if (l.kind === 'shape') { const o = t.origLayer!.shape!; l.shape!.path = V.mapPath(o.path, (x, y) => { const p = fromRect({ x, y }); return [p.x, p.y]; }); }
     else if (l.kind === 'text') {
@@ -399,8 +405,13 @@ function warpRender(src: Canvas, cp: Pt[]) {
   const c = makeCanvas(Math.ceil(Math.max(...xs)) - x0 + 4, Math.ceil(Math.max(...ys)) - y0 + 4), x = ctx2d(c); x.translate(-x0, -y0);
   meshWarp(x, src, bezierPatch(cp), 20); return { canvas: c, x: x0, y: y0 };
 }
+function deformMap(t: TransformSession): (p: Pt) => Pt {
+  if (t.pins) return DF.puppetMap(t.pins, t.puppetMode);
+  if (t.plane && t.phase === 'warp') return DF.homography(t.plane.src, t.plane.dst);
+  return (p) => p;
+}
 export function refreshTransform(d: Doc) { if (ts.transform) applyTransformPreview(d, (window as any).__monsoonView || null); }
-export function commitTransform(d: Doc) { const t = ts.transform; if (!t) return; ts.transform = null; clearCaches(); d.commit(t.mode === 'warp' ? 'Warp' : 'Free Transform'); app.emit(); }
+export function commitTransform(d: Doc) { const t = ts.transform; if (!t) return; ts.transform = null; clearCaches(); d.commit(({ warp: 'Warp', puppet: 'Puppet Warp', pwarp: 'Perspective Warp' } as Record<string, string>)[t.mode] || 'Free Transform'); app.emit(); }
 export function cancelTransform(d: Doc) {
   const t = ts.transform; if (!t) return; ts.transform = null;
   d.goto(d.hIndex); clearCaches(); app.emit();
@@ -415,14 +426,33 @@ export function transformBy(d: Doc, op: 'flipH' | 'flipV' | 'rot90' | 'rot-90' |
 }
 function handlesOf(t: TransformSession): [string, Pt][] {
   const q = t.quad, mid = (a: Pt, b: Pt) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  if (t.pins) return [];
+  if (t.plane) return (t.phase === 'warp' ? t.plane.dst : t.plane.src).map((p, i) => ['p' + i, p] as [string, Pt]);
   if (t.warp) return t.warp.map((p, i) => ['w' + i, p] as [string, Pt]);
   return [['tl', q[0]], ['tr', q[1]], ['br', q[2]], ['bl', q[3]], ['t', mid(q[0], q[1])], ['r', mid(q[1], q[2])], ['b', mid(q[2], q[3])], ['l', mid(q[3], q[0])]];
+}
+/** Where a point on the warped image came from, found by a few fixed-point steps, so new pins sit on the same pixel. */
+function invertPuppet(t: TransformSession, p: Pt): Pt {
+  const f = deformMap(t); let g = { ...p };
+  for (let i = 0; i < 25; i++) { const m = f(g); g = { x: g.x + (p.x - m.x) * 0.8, y: g.y + (p.y - m.y) * 0.8 }; }
+  return g;
 }
 function insideQuad(q: Quad, p: Pt) { let c = false; for (let i = 0, j = 3; i < 4; j = i++) { const a = q[i], b = q[j]; if ((a.y > p.y) !== (b.y > p.y) && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) c = !c; } return c; }
 export const transformTool: Handler = {
   down(d, e, v) {
     const t = ts.transform; if (!t) return;
     const vz = (window as any).__monsoonView as ViewApi;
+    if (t.pins) {
+      const sp = vz.toScreen(e.p); const k = t.pins.findIndex((p) => { const s = vz.toScreen(p.dst); return Math.hypot(s.x - sp.x, s.y - sp.y) < 10; });
+      if (k >= 0 && e.alt) { t.pins.splice(k, 1); applyTransformPreview(d, v); app.emit(); return; }
+      if (k >= 0) { t.handle = 'pin' + k; t.start = { p: e.p, dst: { ...t.pins[k].dst } }; return; }
+      const inv = invertPuppet(t, e.p); t.pins.push({ src: inv, dst: { ...e.p } }); t.handle = 'pin' + (t.pins.length - 1); t.start = { p: e.p, dst: { ...e.p } }; app.emit(); return;
+    }
+    if (t.plane) {
+      const q = t.phase === 'warp' ? t.plane.dst : t.plane.src;
+      const near = handlesOf(t).find(([, p]) => { const s = vz.toScreen(p), r = vz.toScreen(e.p); return Math.hypot(s.x - r.x, s.y - r.y) < 12; });
+      t.handle = near ? near[0] : insideQuad(q, e.p) ? 'pmove' : null; t.start = { p: e.p, q: q.map((p) => ({ ...p })) }; return;
+    }
     const near = handlesOf(t).find(([, p]) => { const s = vz.toScreen(p), r = vz.toScreen(e.p); return Math.hypot(s.x - r.x, s.y - r.y) < 10; });
     const c = { x: (t.quad[0].x + t.quad[2].x) / 2, y: (t.quad[0].y + t.quad[2].y) / 2 };
     t.handle = near ? near[0] : insideQuad(t.quad, e.p) ? 'move' : 'rotate';
@@ -431,6 +461,13 @@ export const transformTool: Handler = {
   },
   move(d, e, v) {
     const t = ts.transform; if (!t || !t.handle || !t.start) return;
+    if (t.pins && t.handle.startsWith('pin')) { const k = +t.handle.slice(3); t.pins[k].dst = { x: t.start.dst.x + e.p.x - t.start.p.x, y: t.start.dst.y + e.p.y - t.start.p.y }; applyTransformPreview(d, v); return; }
+    if (t.plane) {
+      const s0 = t.start, ddx = e.p.x - s0.p.x, ddy = e.p.y - s0.p.y;
+      const nq = s0.q.map((p: Pt, i: number) => (t.handle === 'pmove' || t.handle === 'p' + i ? { x: p.x + ddx, y: p.y + ddy } : p)) as Quad;
+      if (t.phase === 'warp') t.plane.dst = nq; else { t.plane.src = nq; t.plane.dst = nq.map((p) => ({ ...p })) as Quad; }
+      applyTransformPreview(d, v); return;
+    }
     const s = t.start, dx = e.p.x - s.p.x, dy = e.p.y - s.p.y, q = s.quad.map((p: Pt) => ({ ...p })) as Quad;
     if (t.handle.startsWith('w')) { const i = +t.handle.slice(1); t.warp = s.warp.map((p: Pt, k: number) => (k === i ? { x: p.x + dx, y: p.y + dy } : p)); }
     else if (t.handle === 'move') { if (t.warp) t.warp = s.warp.map((p: Pt) => ({ x: p.x + dx, y: p.y + dy })); else t.quad = q.map((p) => ({ x: p.x + dx, y: p.y + dy })) as Quad; }
@@ -472,6 +509,23 @@ export const transformTool: Handler = {
   overlay(x, _d, v) {
     const t = ts.transform; if (!t) return;
     x.save(); x.strokeStyle = '#6c7cff'; x.lineWidth = 1.2;
+    if (t.pins) {
+      if (t.showMesh) {
+        const f = deformMap(t), r = t.rect, n = 12; x.globalAlpha = 0.55; x.beginPath();
+        for (let j = 0; j <= n; j++) for (let k = 0; k <= n; k++) { const s = v.toScreen(f({ x: r.x + (r.w * k) / n, y: r.y + (r.h * j) / n })); k ? x.lineTo(s.x, s.y) : x.moveTo(s.x, s.y); }
+        for (let j = 0; j <= n; j++) for (let k = 0; k <= n; k++) { const s = v.toScreen(f({ x: r.x + (r.w * j) / n, y: r.y + (r.h * k) / n })); k ? x.lineTo(s.x, s.y) : x.moveTo(s.x, s.y); }
+        x.stroke(); x.globalAlpha = 1;
+      }
+      t.pins.forEach((p, i) => { const s = v.toScreen(p.dst); x.beginPath(); x.arc(s.x, s.y, 6, 0, 7); x.fillStyle = t.handle === 'pin' + i ? '#ffd166' : '#fff'; x.fill(); x.stroke(); x.beginPath(); x.arc(s.x, s.y, 2, 0, 7); x.fillStyle = '#000'; x.fill(); });
+      x.restore(); return;
+    }
+    if (t.plane) {
+      const q = t.phase === 'warp' ? t.plane.dst : t.plane.src, f = DF.homography([{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }], q);
+      x.beginPath(); for (let k = 0; k <= 4; k++) for (const [a, b] of [[[k / 4, 0], [k / 4, 1]], [[0, k / 4], [1, k / 4]]]) { const s1 = v.toScreen(f({ x: a[0], y: a[1] })), s2 = v.toScreen(f({ x: b[0], y: b[1] })); x.moveTo(s1.x, s1.y); x.lineTo(s2.x, s2.y); }
+      x.strokeStyle = t.phase === 'warp' ? '#ffd166' : '#6c7cff'; x.stroke();
+      for (const p of q) { const s = v.toScreen(p); x.fillStyle = '#fff'; x.beginPath(); x.arc(s.x, s.y, 6, 0, 7); x.fill(); x.stroke(); }
+      x.restore(); return;
+    }
     if (t.warp) {
       const f = bezierPatch(t.warp); x.beginPath();
       for (let i = 0; i <= 3; i++) for (let k = 0; k <= 20; k++) { const s = v.toScreen(f(i / 3, k / 20)); k ? x.lineTo(s.x, s.y) : x.moveTo(s.x, s.y); }
@@ -959,3 +1013,4 @@ export function handlerFor(t: ToolId): Handler { return ts.transform ? transform
 export { commands };
 
 (window as any).__tools = HANDLERS;
+(window as any).__monsoonTS = ts;

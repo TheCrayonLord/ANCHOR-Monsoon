@@ -34,6 +34,7 @@ export function Modal({ title, children, onOk, onCancel, okLabel = 'OK', wide, e
     </div>
   );
 }
+import * as DFM from '../engine/deform';
 const close = () => app.closeDialog();
 const ok = (cmd: string, args?: any, label?: string) => { close(); run(cmd, args, label); };
 
@@ -239,6 +240,23 @@ function ImageSizeDialog() {
     <div className="row"><Check label="Resample" value={resample} onChange={setResample} /><Select value={rs} options={[['bicubic', 'Bicubic (smooth)'], ['bilinear', 'Bilinear'], ['nearest', 'Nearest Neighbor (hard edges)'], ['enlarge', 'Preserve Details (enlargement)']]} onChange={setRs} /></div>
   </Modal>;
 }
+function CASDialog() {
+  const d = requireDoc(); const l = d.active; const [w, setW] = useState(75), [h, setH] = useState(100), [ps, setPs] = useState(!!d.s.selection), [skin, setSkin] = useState(false);
+  const src = usePreviewSource(); const [busy, setBusy] = useState(false);
+  if (!l || l.kind !== 'raster' || !l.canvas) return <Modal title="Content-Aware Scale" onOk={close}><p>Select a pixel layer first. Content-Aware Scale resizes a layer while keeping people and important details from being squashed.</p></Modal>;
+  const prot = (cw: number, ch: number, s: number) => { if (!ps || !d.s.selection) return null; const b = Sel.maskBounds(d.s.selection) || { x: 0, y: 0, w: d.w, h: d.h }; const m = makeCanvas(cw, ch); const x = ctx2d(m); x.drawImage(d.s.selection, b.x, b.y, b.w, b.h, 0, 0, cw, ch); void s; const md = getData(m).data, o = new Uint8ClampedArray(cw * ch); for (let i = 0; i < o.length; i++) o[i] = md[i * 4]; return o; };
+  return <Modal title="Content-Aware Scale" okLabel={busy ? 'Working…' : 'Scale'} onOk={() => { setBusy(true); setTimeout(() => ok('contentAwareScale', { w: Math.max(1, Math.round(l.canvas!.width * w / 100)), h: Math.max(1, Math.round(l.canvas!.height * h / 100)), protectSel: ps, skin }), 30); }}>
+    <div className="two-col"><Preview src={ps && d.s.selection ? null : src} fn={(img) => { const r = DFM.seamCarve(img, img.width * w / 100, img.height * h / 100, prot(img.width, img.height, 1), skin); const o = new ImageData(img.width, img.height); for (let y = 0; y < Math.min(r.height, img.height); y++) for (let x = 0; x < Math.min(r.width, img.width); x++) { const a = (y * r.width + x) * 4, b = (y * img.width + x) * 4; o.data[b] = r.data[a]; o.data[b + 1] = r.data[a + 1]; o.data[b + 2] = r.data[a + 2]; o.data[b + 3] = r.data[a + 3]; } return o; }} deps={[w, h, ps, skin]} />
+    <div className="form">
+      <p className="muted">Resizes "{l.name}" by removing or adding low-detail seams, so faces and objects keep their shape.</p>
+      <Slider label="Width" value={w} min={20} max={200} unit="%" onChange={setW} />
+      <Slider label="Height" value={h} min={20} max={200} unit="%" onChange={setH} />
+      <p className="muted small">{Math.round(l.canvas.width * w / 100)} × {Math.round(l.canvas.height * h / 100)} px</p>
+      <Check label="Protect the current selection" value={ps} onChange={setPs} />
+      <Check label="Protect skin tones" value={skin} onChange={setSkin} />
+    </div></div>
+  </Modal>;
+}
 function CanvasSizeDialog() {
   const d = requireDoc(); const [rel, setRel] = useState(false), [w, setW] = useState(d.w), [h, setH] = useState(d.h), [anchor, setAnchor] = useState<[number, number]>([0.5, 0.5]), [color, setColor] = useState(app.bg);
   const W = rel ? d.w + w : w, H = rel ? d.h + h : h;
@@ -350,6 +368,7 @@ export function Dialogs() {
     case 'filter': return <FilterDialog id={p.id} smartId={p.smartId} />;
     case 'replaceColor': return <ReplaceColorDialog />;
     case 'imageSize': return <ImageSizeDialog />;
+    case 'cas': return <CASDialog />;
     case 'canvasSize': return <CanvasSizeDialog />;
     case 'rotate': return <RotateDialog />;
     case 'trim': return <TrimDialog />;

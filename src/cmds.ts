@@ -781,3 +781,22 @@ def('vectorMask', (kind: 'reveal' | 'fromPath' | 'delete' | 'toggle' | 'rasteriz
   }
   l.ver++; clearCaches(l.id); done(d, 'Vector Mask');
 });
+
+// ---------- content-aware scale ----------
+import * as DFM from './engine/deform';
+commands.contentAwareScale = (a: { w: number; h: number; protectSel?: boolean; skin?: boolean }) => {
+  const d = requireDoc(); const l = d.active;
+  if (!l || l.kind !== 'raster' || !l.canvas) { app.toast('Content-Aware Scale works on a pixel layer. Rasterize it first.', 'error'); return false; }
+  if (l.locks.all || l.locks.pixels) { app.toast('That layer is locked.', 'error'); return false; }
+  const c = l.canvas, img = getData(c);
+  let prot: Uint8ClampedArray | null = null;
+  if (a.protectSel && d.s.selection) {
+    const m = makeCanvas(c.width, c.height); ctx2d(m).drawImage(d.s.selection, -l.x, -l.y);
+    const md = getData(m).data; prot = new Uint8ClampedArray(c.width * c.height); for (let i = 0; i < prot.length; i++) prot[i] = md[i * 4];
+  }
+  const out = DFM.seamCarve(img, a.w, a.h, prot, !!a.skin);
+  const n = makeCanvas(out.width, out.height); ctx2d(n).putImageData(out, 0, 0);
+  l.canvas = n; l.ver++;
+  if (a.protectSel) d.s.selection = null;
+  clearCaches(); d.commit('Content-Aware Scale'); app.emit(); return true;
+};

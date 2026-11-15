@@ -60,7 +60,7 @@ export const MENUS: { label: string; items: MenuItem[] }[] = [
       S, { label: 'Rotate 180°', cmd: 'transformQuick', args: 'rot180' }, { label: 'Rotate 90° Clockwise', cmd: 'transformQuick', args: 'rot90' }, { label: 'Rotate 90° Counter Clockwise', cmd: 'transformQuick', args: 'rot-90' },
       S, { label: 'Flip Horizontal', cmd: 'transformQuick', args: 'flipH' }, { label: 'Flip Vertical', cmd: 'transformQuick', args: 'flipV' },
     ] },
-    { label: 'Puppet Warp / Perspective Warp', act: () => app.toast('Puppet Warp and Perspective Warp are not available yet. Use Edit > Transform > Warp.') },
+    { label: 'Content-Aware Scale…', act: () => app.openDialog('cas'), enabled: hasDoc }, { label: 'Puppet Warp', cmd: 'freeTransform', args: 'puppet', enabled: hasDoc }, { label: 'Perspective Warp', cmd: 'freeTransform', args: 'pwarp', enabled: hasDoc },
     S, { label: 'Define Brush Preset…', cmd: 'defineBrush', enabled: hasDoc }, { label: 'Define Pattern…', cmd: 'definePattern', enabled: hasDoc },
     { label: 'Purge History', cmd: 'purge', enabled: hasDoc },
     S, { label: 'Keyboard Shortcuts…', act: () => app.openDialog('shortcuts'), key: 'Ctrl+Alt+Shift+K' }, { label: 'Preferences…', act: () => app.openDialog('prefs'), key: 'Ctrl+K' },
