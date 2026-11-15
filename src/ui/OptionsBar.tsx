@@ -7,7 +7,7 @@ import { BRUSH_PRESETS } from '../engine/brush';
 import { GRADIENT_PRESETS, gradientCss, patternNames } from '../engine/paint';
 import { CUSTOM_SHAPES } from '../engine/vector';
 import { FONTS } from '../app';
-import { run } from '../cmds';
+import { run, ARTBOARD_PRESETS } from '../cmds';
 import { toolName } from './Toolbar';
 import { TOOL_ICONS } from './icons';
 import { Check as CheckIcon, X, AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react';
@@ -55,6 +55,14 @@ export function OptionsBar() {
       <Commit onOk={() => commitTransform(d)} onCancel={() => cancelTransform(d)} />
     </>);
   } else switch (t) {
+    case 'artboard': { const ab = d?.active?.artboard; body = (<>
+      <button className="btn sm" onClick={() => run('newArtboard')}>Add Artboard</button>
+      <Select label="Size" value="" options={[['', ab ? `${ab.w} × ${ab.h}` : 'Preset'], ...ARTBOARD_PRESETS.map(([n]) => [n, n] as [string, string])]} onChange={(n) => { const p = ARTBOARD_PRESETS.find((x) => x[0] === n); if (!p) return; if (ab) run('setArtboard', { w: p[1], h: p[2] }); else run('newArtboard', { w: p[1], h: p[2], name: n.split(' ')[0] }); }} />
+      {ab && <><Num label="W" value={ab.w} min={1} onChange={(v) => run('setArtboard', { w: v })} /><Num label="H" value={ab.h} min={1} onChange={(v) => run('setArtboard', { h: v })} /><button className="btn sm" onClick={() => run('setArtboard', { w: ab.h, h: ab.w })}>Rotate</button>
+        <span className="lbl">Background</span><ColorChip value={ab.bg || '#ffffff'} onChange={(v) => run('setArtboard', { bg: v })} /><Check label="Transparent" value={!ab.bg} onChange={(v) => run('setArtboard', { bg: v ? null : '#ffffff' })} /></>}
+      <button className="btn sm" onClick={() => run('exportArtboards')}>Export Artboards</button>
+      <span className="hint">Drag to draw an artboard. Drag inside one to move it with its layers.</span>
+    </>); break; }
     case 'move': body = (<>
       <Check label="Auto-Select" value={o.autoSelect} onChange={(v) => set({ autoSelect: v })} />
       <Select value={o.autoSelectGroups ? 'group' : 'layer'} options={[['layer', 'Layer'], ['group', 'Group']]} onChange={(v) => set({ autoSelectGroups: v === 'group' })} />

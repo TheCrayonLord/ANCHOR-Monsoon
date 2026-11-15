@@ -161,7 +161,9 @@ h4:first-child { margin-top: 0; }
 .lthumb.icon { display: flex; align-items: center; justify-content: center; background: var(--panel2); color: var(--muted); }
 .lthumb.on { outline: 2px solid var(--text); outline-offset: 1px; }
 .lthumb.mask { background: #000; }
-.lthumb.mask.off { opacity: 0.4; }
+.lthumb.mask.off, .lthumb.vmask.off { opacity: 0.4; }
+.lthumb.vmask { display: flex; overflow: hidden; padding: 1px; }
+.lthumb.vmask svg { width: 100%; height: 100%; }
 .lname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lname-edit { flex: 1; }
 .lbadges { display: flex; align-items: center; gap: 4px; }

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { app, flatLayers } from '../app';
 import type { Doc } from '../engine/doc';
 import type { Layer, AdjType } from '../engine/types';
-import { run, moveLayerTo, ADJ_TYPES } from '../cmds';
+import { run, moveLayerTo, ADJ_TYPES, ARTBOARD_PRESETS } from '../cmds';
 import { layerContent, maskAlpha, flatten } from '../engine/render';
 import { ctx2d, makeCanvas, hexToRgb, rgbToHex, rgbToHsv, hsvToRgb, rgbToCmyk, rgbToLab, getData } from '../engine/util';
 import { Slider, Select, Check, ColorChip, Num, Seg } from './controls';
@@ -50,7 +50,7 @@ const tabOf = (id: string, def: string) => ((app.panelsOpen as any)['_tab_' + id
 function LayerRow({ d, l, depth }: { d: Doc; l: Layer; depth: number }) {
   const sel = d.s.selectedIds.includes(l.id), act = d.s.activeId === l.id;
   const [rename, setRename] = useState(false);
-  const kindIcon = l.kind === 'text' ? <I.Type size={14} /> : l.kind === 'adjustment' ? <I.Contrast size={14} /> : l.kind === 'group' ? (l.collapsed ? <I.Folder size={14} /> : <I.FolderOpen size={14} />) : l.kind === 'smart' ? <I.FileImage size={14} /> : null;
+  const kindIcon = l.kind === 'text' ? <I.Type size={14} /> : l.kind === 'adjustment' ? <I.Contrast size={14} /> : l.artboard ? <I.Frame size={14} /> : l.kind === 'group' ? (l.collapsed ? <I.Folder size={14} /> : <I.FolderOpen size={14} />) : l.kind === 'smart' ? <I.FileImage size={14} /> : null;
   return (
     <>
       <div className={'layer-row' + (sel ? ' sel' : '') + (act ? ' act' : '') + (l.clip ? ' clipped' : '')} style={{ paddingLeft: 4 + depth * 14 }} draggable
@@ -68,6 +68,7 @@ function LayerRow({ d, l, depth }: { d: Doc; l: Layer; depth: number }) {
         {l.linkId && <I.Link size={11} className="dim" />}
         {l.mask && <img className={'lthumb mask' + (app.editMask && act ? ' on' : '') + (l.mask.enabled ? '' : ' off')} src={thumb(d, l, true)} alt="mask" title="Layer mask. Click to edit, Alt-click to view, Shift-click to disable"
           onClick={(e) => { e.stopPropagation(); d.setActive(l.id); if (e.shiftKey) { run('mask', 'toggle'); return; } if (e.altKey) { app.showMask = !app.showMask; } app.editMask = true; app.emit(); }} />}
+        {l.vmask && <span className={'lthumb vmask' + (l.vmask.enabled ? '' : ' off')} title="Vector mask. Edit it with the Path Selection or Direct Selection tool." onClick={(e) => { e.stopPropagation(); d.setActive(l.id); selectTool('direct-select'); }}><svg width="30" height="26" viewBox={`0 0 ${d.w} ${d.h}`}><rect width={d.w} height={d.h} fill="#555" /><path d={vpathD(l.vmask.path)} fill="#fff" fillRule="evenodd" /></svg></span>}
         {rename ? <input className="lname-edit" autoFocus defaultValue={l.name} onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setRename(false); }} onBlur={(e) => { setRename(false); if (e.target.value && e.target.value !== l.name) run('layerProps', { id: l.id, name: e.target.value }); }} onClick={(e) => e.stopPropagation()} />
           : <span className="lname" onDoubleClick={(e) => { e.stopPropagation(); setRename(true); }} style={l.color ? { borderLeft: `3px solid ${l.color}`, paddingLeft: 4 } : undefined}>{l.name}</span>}
         <span className="lbadges">
@@ -204,6 +205,9 @@ function CompsPanel({ d }: { d: Doc }) {
     <div className="pfoot"><button className="icon-btn" title="New layer comp" onClick={() => { const n = prompt('Layer comp name', `Layer Comp ${d.s.comps.length + 1}`); if (n) run('layerComp', { op: 'new', name: n }); }}><I.FilePlus size={14} /></button></div></>);
 }
 
+function vpathD(p: { subpaths: { points: { x: number; y: number; ix: number; iy: number; ox: number; oy: number }[]; closed: boolean }[] }) {
+  let s = ''; for (const sp of p.subpaths) { const n = sp.points.length; if (!n) continue; s += `M${sp.points[0].x} ${sp.points[0].y} `; const m = sp.closed ? n : n - 1; for (let i = 0; i < m; i++) { const a = sp.points[i], b = sp.points[(i + 1) % n]; s += `C${a.ox} ${a.oy} ${b.ix} ${b.iy} ${b.x} ${b.y} `; } if (sp.closed) s += 'Z '; } return s;
+}
 // ---------------- Properties ----------------
 function PropertiesPanel({ d }: { d: Doc }) {
   const l = d.active;
@@ -236,6 +240,15 @@ function PropertiesPanel({ d }: { d: Doc }) {
     </>}
     {l.kind === 'smart' && l.smart && <><h4>Smart Object</h4><p className="muted">{l.smart.name} · {l.smart.source.width} × {l.smart.source.height} px</p><div className="row"><button className="btn sm" onClick={() => run('editSmart')}>Edit Contents</button><button className="btn sm" onClick={() => run('replaceSmart')}>Replace…</button><button className="btn sm" onClick={() => run('freeTransform')}>Transform</button></div></>}
     {(l.kind === 'raster' || l.kind === 'smart' || l.kind === 'text' || l.kind === 'shape') && (() => { const p = layerContent(d, l); return p ? <><h4>Transform</h4><div className="row"><Num label="X" value={l.kind === 'raster' ? l.x : 0} onChange={(v) => upd(() => { if (l.kind === 'raster') l.x = Math.round(v); }, 'Move')} /><Num label="Y" value={l.kind === 'raster' ? l.y : 0} onChange={(v) => upd(() => { if (l.kind === 'raster') l.y = Math.round(v); }, 'Move')} /><button className="btn sm" onClick={() => run('freeTransform')}>Free Transform</button></div></> : null; })()}
+    {l.artboard && <><h4>Artboard</h4>
+      <div className="row"><Num label="X" value={l.artboard.x} onChange={(v) => run('setArtboard', { x: v })} /><Num label="Y" value={l.artboard.y} onChange={(v) => run('setArtboard', { y: v })} /></div>
+      <div className="row"><Num label="W" value={l.artboard.w} min={1} onChange={(v) => run('setArtboard', { w: v })} /><Num label="H" value={l.artboard.h} min={1} onChange={(v) => run('setArtboard', { h: v })} /></div>
+      <Select label="Size" value="" options={[['', 'Preset…'], ...ARTBOARD_PRESETS.map(([n]) => [n, n] as [string, string])]} onChange={(n) => { const p = ARTBOARD_PRESETS.find((x) => x[0] === n); if (p) run('setArtboard', { w: p[1], h: p[2] }); }} />
+      <div className="row"><span className="lbl">Background</span><ColorChip value={l.artboard.bg || '#ffffff'} onChange={(v) => run('setArtboard', { bg: v })} /><Check label="Transparent" value={!l.artboard.bg} onChange={(v) => run('setArtboard', { bg: v ? null : '#ffffff' })} /><button className="btn sm" onClick={() => run('exportArtboards')}>Export all</button></div></>}
+    {l.vmask && <><h4>Vector Mask</h4>
+      <Slider label="Density" value={Math.round(l.vmask.density * 100)} min={0} max={100} unit="%" onChange={(v) => upd(() => { l.vmask!.density = v / 100; }, 'Vector Mask Density')} />
+      <Slider label="Feather" value={l.vmask.feather} min={0} max={250} step={0.5} unit="px" onChange={(v) => upd(() => { l.vmask!.feather = v; }, 'Vector Mask Feather')} />
+      <div className="row"><button className="btn sm" onClick={() => selectTool('direct-select')}>Edit path</button><button className="btn sm" onClick={() => run('vectorMask', 'toggle')}>{l.vmask.enabled ? 'Disable' : 'Enable'}</button><button className="btn sm" onClick={() => run('vectorMask', 'rasterize')}>Rasterize</button><button className="btn sm" onClick={() => run('vectorMask', 'delete')}>Delete</button></div></>}
     {l.mask && <><h4>Mask</h4>
       <Slider label="Density" value={Math.round(l.mask.density * 100)} min={0} max={100} unit="%" onChange={(v) => upd(() => { l.mask!.density = v / 100; }, 'Mask Density')} />
       <Slider label="Feather" value={l.mask.feather} min={0} max={250} step={0.5} unit="px" onChange={(v) => upd(() => { l.mask!.feather = v; }, 'Mask Feather')} />

@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { app } from '../app';
 import type { Doc } from '../engine/doc';
+import { flatLayers } from '../engine/doc';
 import { renderDoc } from '../engine/render';
 import { outlinePath } from '../engine/selection';
 import { Canvas, ctx2d, makeCanvas, Pt, Rect, getData } from '../engine/util';
@@ -59,7 +60,9 @@ export function View() {
     x.translate(W / 2 + d.panX, H / 2 + d.panY); x.rotate((d.rotation * Math.PI) / 180); x.scale(d.zoom, d.zoom); x.translate(-d.w / 2, -d.h / 2);
     if (app.view.screenMode !== 'full' || true) { x.shadowColor = 'rgba(0,0,0,0.45)'; x.shadowBlur = 16; x.fillStyle = '#fff'; x.fillRect(0, 0, d.w, d.h); x.shadowBlur = 0; }
     if (!checker || (checker as any).__z !== app.prefs.checker) { const s = app.prefs.checker === 'small' ? 4 : app.prefs.checker === 'large' ? 16 : 8, cc = makeCanvas(s * 2, s * 2), cx = ctx2d(cc); cx.fillStyle = '#fff'; cx.fillRect(0, 0, s * 2, s * 2); if (app.prefs.checker !== 'none') { cx.fillStyle = '#cfcfd4'; cx.fillRect(0, 0, s, s); cx.fillRect(s, s, s, s); } checker = x.createPattern(cc, 'repeat'); (checker as any).__z = app.prefs.checker; }
-    x.save(); x.scale(1 / d.zoom, 1 / d.zoom); x.fillStyle = checker!; x.fillRect(0, 0, d.w * d.zoom, d.h * d.zoom); x.restore();
+    const abs = flatLayers(d.layers).filter((l) => l.artboard && l.visible);
+    if (abs.length) { x.fillStyle = '#2a2d40'; x.fillRect(0, 0, d.w, d.h); x.save(); x.scale(1 / d.zoom, 1 / d.zoom); x.fillStyle = checker!; for (const l of abs) { const a = l.artboard!; x.fillRect(a.x * d.zoom, a.y * d.zoom, a.w * d.zoom, a.h * d.zoom); } x.restore(); }
+    else { x.save(); x.scale(1 / d.zoom, 1 / d.zoom); x.fillStyle = checker!; x.fillRect(0, 0, d.w * d.zoom, d.h * d.zoom); x.restore(); }
     x.imageSmoothingEnabled = d.zoom < 2; x.imageSmoothingQuality = 'high';
     const l = d.active;
     if (app.showMask && l?.mask) { x.fillStyle = l.mask.bg ? '#fff' : '#000'; x.fillRect(0, 0, d.w, d.h); x.drawImage(l.mask.canvas, l.mask.x, l.mask.y); }
@@ -74,6 +77,8 @@ export function View() {
     if (app.view.pixelGrid && d.zoom >= 10) { x.beginPath(); const vx0 = 0, vy0 = 0; for (let i = vx0; i <= d.w; i++) { x.moveTo(i, 0); x.lineTo(i, d.h); } for (let j = vy0; j <= d.h; j++) { x.moveTo(0, j); x.lineTo(d.w, j); } x.strokeStyle = 'rgba(128,128,128,0.35)'; x.lineWidth = 1 / d.zoom; x.stroke(); }
     if (app.view.grid && app.view.extras) { x.beginPath(); const g = app.view.gridSize; for (let i = g; i < d.w; i += g) { x.moveTo(i, 0); x.lineTo(i, d.h); } for (let j = g; j < d.h; j += g) { x.moveTo(0, j); x.lineTo(d.w, j); } x.strokeStyle = 'rgba(120,140,255,0.45)'; x.lineWidth = 1 / d.zoom; x.stroke(); }
     if (app.view.guides && app.view.extras) { x.beginPath(); for (const g of d.s.guides) { if (g.axis === 'v') { x.moveTo(g.pos, -1e5); x.lineTo(g.pos, 1e5); } else { x.moveTo(-1e5, g.pos); x.lineTo(1e5, g.pos); } } x.strokeStyle = '#2fd0ff'; x.lineWidth = 1 / d.zoom; x.stroke(); }
+    // artboard outlines and names
+    if (app.view.extras) for (const ab of flatLayers(d.layers)) { const a = ab.artboard; if (!a || !ab.visible) continue; const on = ab.id === d.s.activeId; x.strokeStyle = on ? '#6c7cff' : 'rgba(150,160,200,0.7)'; x.lineWidth = (on ? 2 : 1) / d.zoom; x.strokeRect(a.x, a.y, a.w, a.h); x.fillStyle = on ? '#9fa9ff' : '#9aa0c0'; x.font = `${12 / d.zoom}px Inter, system-ui, sans-serif`; x.fillText(ab.name, a.x, a.y - 6 / d.zoom); }
     // marching ants
     if (d.s.selection && !d.quickMask && app.view.showSelection && app.view.extras && !ts.transform) {
       let p = antsCache.get(d.s.selection); if (!p) { p = outlinePath(d.s.selection); antsCache.set(d.s.selection, p); }

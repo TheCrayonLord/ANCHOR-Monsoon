@@ -38,7 +38,6 @@ export function selectTool(id: ToolId) {
   if (id === 'crop' && app.doc && !ts.crop) startCrop(app.doc);
   if (id !== 'crop') ts.crop = null;
   if (id !== 'crop-perspective') ts.pcrop = null;
-  if (id === 'artboard') { app.toast('Artboards are not supported yet; the Move tool is selected instead.'); id = 'move'; }
   app.setTool(id);
 }
 /** Keyboard: pressing a tool letter selects the group; Shift+letter cycles within it. */

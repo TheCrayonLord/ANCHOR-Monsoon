@@ -480,6 +480,8 @@ export function offsetLayer(l: Layer, dx: number, dy: number) {
   if (l.shape) l.shape.path = VEC.mapPath(l.shape.path, (x, y) => [x + dx, y + dy]);
   if (l.smart) l.smart.quad = l.smart.quad.map((p) => ({ x: p.x + dx, y: p.y + dy })) as any;
   if (l.fill && l.mask && !l.mask.linked) { /* fills cover everything */ }
+  if (l.artboard) { l.artboard.x += dx; l.artboard.y += dy; }
+  if (l.vmask) l.vmask.path = VEC.mapPath(l.vmask.path, (x, y) => [x + dx, y + dy]);
   l.children?.forEach((c) => offsetLayer(c, dx, dy));
   l.ver++;
 }
@@ -713,3 +715,69 @@ def('batch', async (a: { actionId: string; fmt: ExportFormat }) => {
 
 export const ADJ_TYPES = Object.keys(ADJ_DEFAULTS) as AdjType[];
 export { renderGradient, inpaint, Sel };
+
+// ---------------- Artboards ----------------
+export const ARTBOARD_PRESETS: [string, number, number][] = [
+  ['Phone 1179 × 2556', 1179, 2556], ['Phone 1080 × 1920', 1080, 1920], ['Tablet 2048 × 2732', 2048, 2732], ['Web 1920 × 1080', 1920, 1080], ['Web 1440 × 900', 1440, 900],
+  ['Square post 1080', 1080, 1080], ['Portrait post 1080 × 1350', 1080, 1350], ['Story 1080 × 1920', 1080, 1920], ['Banner 1200 × 628', 1200, 628], ['Icon 1024', 1024, 1024], ['A4 2480 × 3508', 2480, 3508],
+];
+export const artboards = (d: Doc) => flatLayers(d.layers).filter((l) => l.artboard);
+function growCanvas(d: Doc, W: number, H: number) {
+  if (W <= d.w && H <= d.h) return;
+  const dx = 0, dy = 0; d.s.width = Math.max(W, d.w); d.s.height = Math.max(H, d.h); void dx; void dy;
+  clearCaches();
+}
+def('newArtboard', (a: { rect?: Rect; w?: number; h?: number; name?: string; bg?: string | null } = {}) => {
+  const d = requireDoc(); const abs = artboards(d);
+  let r = a.rect;
+  if (!r) {
+    const w = a.w || d.w, h = a.h || d.h;
+    if (!abs.length && !a.w) r = { x: 0, y: 0, w: d.w, h: d.h };
+    else { const right = abs.length ? Math.max(...abs.map((l) => l.artboard!.x + l.artboard!.w)) + 100 : 0; r = { x: right, y: 0, w, h }; }
+  }
+  r = { x: Math.round(r.x), y: Math.round(r.y), w: Math.max(1, Math.round(r.w)), h: Math.max(1, Math.round(r.h)) };
+  growCanvas(d, r.x + r.w, r.y + r.h);
+  const g = newLayer('group', a.name || `Artboard ${abs.length + 1}`, { blend: 'normal', artboard: { ...r, bg: a.bg === undefined ? '#ffffff' : a.bg } });
+  d.s.layers.push(g); d.setActive(g.id); done(d, 'New Artboard');
+  setTimeout(() => commands.fit?.(), 0);
+});
+def('artboardFromLayers', () => {
+  const d = requireDoc(); const ls = d.selectedLayers().filter((l) => !l.artboard); if (!ls.length) return false;
+  let b: Rect | null = null; for (const l of ls) { const r = layerBounds(d, l); if (r) b = b ? { x: Math.min(b.x, r.x), y: Math.min(b.y, r.y), w: Math.max(b.x + b.w, r.x + r.w) - Math.min(b.x, r.x), h: Math.max(b.y + b.h, r.y + r.h) - Math.min(b.y, r.y) } : r; }
+  const r = b || { x: 0, y: 0, w: d.w, h: d.h };
+  const g = newLayer('group', `Artboard ${artboards(d).length + 1}`, { blend: 'normal', artboard: { x: r.x, y: r.y, w: r.w, h: r.h, bg: null } });
+  const first = d.parentOf(ls[0].id)!; const idx = first.index;
+  for (const l of ls) { const p = d.parentOf(l.id)!; p.list.splice(p.index, 1); }
+  g.children = ls.reverse().reverse(); d.s.layers.splice(Math.min(idx, d.s.layers.length), 0, g); d.setActive(g.id); done(d, 'Artboard from Layers');
+});
+def('setArtboard', (a: { id?: string; x?: number; y?: number; w?: number; h?: number; bg?: string | null; name?: string }) => {
+  const d = requireDoc(); const l = d.find(a.id || d.s.activeId); if (!l?.artboard) return false;
+  const ab = l.artboard; if (a.x !== undefined || a.y !== undefined) offsetLayer(l, Math.round((a.x ?? ab.x) - ab.x), Math.round((a.y ?? ab.y) - ab.y));
+  if (a.w) ab.w = Math.round(a.w); if (a.h) ab.h = Math.round(a.h); if (a.bg !== undefined) ab.bg = a.bg; if (a.name) l.name = a.name;
+  growCanvas(d, ab.x + ab.w, ab.y + ab.h); l.ver++; done(d, 'Edit Artboard');
+});
+def('exportArtboards', async (a: { fmt?: ExportFormat } = {}) => {
+  const d = requireDoc(); const abs = artboards(d); if (!abs.length) { app.toast('This document has no artboards.'); return false; }
+  const fmt = a.fmt || 'png'; const JSZip = (await import('jszip')).default; const zip = new JSZip(); const { exportCanvas } = await import('./engine/io');
+  for (const l of abs) { const ab = l.artboard!; const full = flatten(d, undefined, [{ ...l, visible: true }]); const c = makeCanvas(ab.w, ab.h); ctx2d(c).drawImage(full, -ab.x, -ab.y); zip.file(`${l.name.replace(/[^\w\- ]+/g, '_')}.${EXT[fmt]}`, await exportCanvas(c, fmt)); }
+  download(await zip.generateAsync({ type: 'blob' }), d.name + '-artboards.zip'); return false;
+});
+
+// ---------------- Vector masks ----------------
+def('vectorMask', (kind: 'reveal' | 'fromPath' | 'delete' | 'toggle' | 'rasterize' | 'fromShape') => {
+  const { d, l } = active();
+  if (kind === 'delete') delete l.vmask;
+  else if (kind === 'toggle') { if (l.vmask) l.vmask.enabled = !l.vmask.enabled; }
+  else if (kind === 'rasterize') {
+    if (!l.vmask) return false; const m = Sel.shapeMask(d.w, d.h, (x) => { x.fillStyle = '#fff'; x.fill(pathToPath2D(l.vmask!.path), 'evenodd'); }, l.vmask.feather);
+    if (l.mask) { const mm = d.editableMask(l); const x = ctx2d(mm.canvas); x.globalCompositeOperation = 'multiply'; x.drawImage(m, -mm.x, -mm.y); x.globalCompositeOperation = 'source-over'; }
+    else l.mask = { canvas: m, x: 0, y: 0, bg: 0, enabled: true, linked: true, density: l.vmask.density, feather: 0 };
+    delete l.vmask;
+  } else {
+    let path: any;
+    if (kind === 'fromPath') { const p = (d as any).activePath ? d.s.paths.find((x) => x.id === (d as any).activePath) : d.s.paths.find((x) => x.work) || d.s.paths[d.s.paths.length - 1]; if (!p) { app.toast('Draw a path with the Pen tool (Path mode) first.'); return false; } path = JSON.parse(JSON.stringify(p.path)); }
+    else { const b = layerBounds(d, l) || { x: 0, y: 0, w: d.w, h: d.h }; path = VEC.rectPath(b, 0); }
+    l.vmask = { path, enabled: true, feather: 0, density: 1 };
+  }
+  l.ver++; clearCaches(l.id); done(d, 'Vector Mask');
+});

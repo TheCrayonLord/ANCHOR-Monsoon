@@ -786,6 +786,7 @@ const pen: Handler = {
 function editablePaths(d: Doc): { path: VectorPath; layer?: Layer }[] {
   const out: { path: VectorPath; layer?: Layer }[] = [];
   const l = d.active; if (l?.shape) out.push({ path: l.shape.path, layer: l });
+  if (l?.vmask) out.push({ path: l.vmask.path, layer: l });
   const sel = (d as any).activePath ? d.s.paths.find((p) => p.id === (d as any).activePath) : d.s.paths.find((p) => p.work);
   if (sel) out.push({ path: sel.path });
   return out;
@@ -901,8 +902,31 @@ const zoom: Handler = {
   cursor: () => (app.opts.zoomOut ? 'zoom-out' : 'zoom-in'),
 };
 
+// ---------- artboard ----------
+function artboardAt(d: Doc, p: Pt): Layer | null { return flatLayers(d.layers).reverse().find((l) => { const a = l.artboard; return !!a && l.visible && p.x >= a.x && p.y >= a.y && p.x <= a.x + a.w && p.y <= a.y + a.h; }) || null; }
+const abState: { ab: Layer | null; start: Pt | null; last: Pt } = { ab: null, start: null, last: { x: 0, y: 0 } };
+const artboardTool: Handler = {
+  down(d, e, v) {
+    const hit = artboardAt(d, e.p);
+    if (hit && !e.alt) { d.setActive(hit.id); abState.ab = hit; abState.start = e.p; abState.last = { x: 0, y: 0 }; app.emit(); return; }
+    ts.drag = e.p; ts.cur = e.p; v.overlay();
+  },
+  move(d, e, v) {
+    if (abState.ab && abState.start) { const dx = Math.round(e.p.x - abState.start.x), dy = Math.round(e.p.y - abState.start.y); offsetLayer(abState.ab, dx - abState.last.x, dy - abState.last.y); abState.last = { x: dx, y: dy }; clearCaches(); d.touch(); v.redraw(null); return; }
+    if (ts.drag) { ts.cur = e.p; v.overlay(); }
+  },
+  up(d) {
+    if (abState.ab) { const moved = abState.last.x || abState.last.y; abState.ab = null; abState.start = null; if (moved) { const ab = d.active?.artboard; if (ab && (ab.x < 0 || ab.y < 0 || ab.x + ab.w > d.w || ab.y + ab.h > d.h)) { d.s.width = Math.max(d.w, ab.x + ab.w); d.s.height = Math.max(d.h, ab.y + ab.h); } d.commit('Move Artboard'); } app.emit(); return; }
+    if (ts.drag && ts.cur) { const r = rectFromPts(ts.drag, ts.cur); ts.drag = null; ts.cur = null; if (r.w > 8 && r.h > 8) run('newArtboard', { rect: r }); app.emit(); }
+  },
+  overlay(x, _d, v) {
+    if (!ts.drag || !ts.cur) return; const a = v.toScreen(ts.drag), b = v.toScreen(ts.cur);
+    x.save(); x.strokeStyle = '#6c7cff'; x.setLineDash([5, 4]); x.lineWidth = 1.5; x.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y)); x.restore();
+  },
+  cursor: () => 'crosshair',
+};
 export const HANDLERS: Partial<Record<ToolId, Handler>> = {
-  move, 'marquee-rect': marquee, 'marquee-ellipse': marquee, 'marquee-row': marquee, 'marquee-col': marquee, lasso, 'lasso-poly': lasso, 'lasso-magnetic': lasso,
+  move, artboard: artboardTool, 'marquee-rect': marquee, 'marquee-ellipse': marquee, 'marquee-row': marquee, 'marquee-col': marquee, lasso, 'lasso-poly': lasso, 'lasso-magnetic': lasso,
   'magic-wand': wand, 'quick-select': quickSelect, 'object-select': objectSelect, crop, 'crop-perspective': perspectiveCrop,
   eyedropper, 'color-sampler': sampler, ruler, note, count,
   'spot-heal': painter, remove: painter, heal: painter, patch, 'content-move': patch, 'red-eye': redEyeTool,

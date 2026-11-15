@@ -5,7 +5,7 @@ import { Canvas, ctx2d, makeCanvas, Rect, rectIntersect, rectRound, hexToRgb } f
 import { drawBlended, blendBuffers } from './blend';
 import { applyAdjustment } from './adjust';
 import { applyStyles, hasStyles } from './styles';
-import { drawShape, drawText } from './vector';
+import { drawShape, drawText, pathToPath2D } from './vector';
 import { renderGradient, fillPattern, withFgBg } from './paint';
 import { renderQuad } from './transform';
 import { FILTER_MAP } from './filterdefs';
@@ -108,6 +108,21 @@ function applyMask(t: Canvas, R: Rect, m: Mask) {
   give(a);
 }
 
+/** Clip a group to its artboard rectangle and put the artboard's background under it. */
+function applyArtboard(t: Canvas, R: Rect, a: NonNullable<Layer['artboard']>) {
+  const x = ctx2d(t); x.save();
+  x.globalCompositeOperation = 'destination-in'; x.fillStyle = '#000'; x.beginPath(); x.rect(a.x - R.x, a.y - R.y, a.w, a.h); x.fill();
+  if (a.bg) { x.globalCompositeOperation = 'destination-over'; x.fillStyle = a.bg; x.fillRect(a.x - R.x, a.y - R.y, a.w, a.h); }
+  x.restore();
+}
+/** Vector mask: the path's inside is revealed, softened by feather, with density keeping some of the outside. */
+function applyVMask(t: Canvas, R: Rect, vm: NonNullable<Layer['vmask']>) {
+  const a = take(t.width, t.height), ax = ctx2d(a);
+  if (vm.density < 1) { ax.fillStyle = `rgba(0,0,0,${1 - vm.density})`; ax.fillRect(0, 0, a.width, a.height); }
+  ax.save(); if (vm.feather > 0) ax.filter = `blur(${vm.feather / 2}px)`; ax.translate(-R.x, -R.y); ax.fillStyle = '#000'; ax.fill(pathToPath2D(vm.path), 'evenodd'); ax.restore();
+  const x = ctx2d(t); x.save(); x.globalCompositeOperation = 'destination-in'; x.drawImage(a, 0, 0); x.restore();
+  give(a);
+}
 // --- region canvas pool ---
 const pool: Canvas[] = [];
 function take(w: number, h: number): Canvas { const c = pool.pop() || makeCanvas(w, h); if (c.width !== w || c.height !== h) { c.width = w; c.height = h; } else ctx2d(c).clearRect(0, 0, w, h); return c; }
@@ -152,7 +167,9 @@ function layerRegion(d: Doc, l: Layer, clipped: Layer[], R: Rect, backdrop: Canv
     const s = styled(d, l, p);
     t = take(R.w, R.h); placeInto(t, R, s);
   }
+  if (l.artboard) applyArtboard(t, R, l.artboard);
   if (l.mask && l.mask.enabled) applyMask(t, R, l.mask);
+  if (l.vmask && l.vmask.enabled) applyVMask(t, R, l.vmask);
   if (clipped.length) {
     const baseAlpha = take(R.w, R.h); ctx2d(baseAlpha).drawImage(t, 0, 0);
     for (const c of clipped) {
@@ -184,7 +201,8 @@ export function renderList(d: Doc, layers: Layer[], target: Canvas, R: Rect) {
       const t = take(R.w, R.h); ctx2d(t).drawImage(target, 0, 0);
       renderList(d, l.children!, t, R);
       if (l.mask && l.mask.enabled) applyMask(t, R, l.mask);
-      if (l.opacity >= 1 && !(l.mask && l.mask.enabled)) { const x = ctx2d(target); x.save(); x.globalCompositeOperation = 'copy'; x.drawImage(t, 0, 0); x.restore(); }
+      if (l.vmask && l.vmask.enabled) applyVMask(t, R, l.vmask);
+      if (l.opacity >= 1 && !(l.mask && l.mask.enabled) && !(l.vmask && l.vmask.enabled)) { const x = ctx2d(target); x.save(); x.globalCompositeOperation = 'copy'; x.drawImage(t, 0, 0); x.restore(); }
       else { const x = ctx2d(target); x.globalAlpha = l.opacity; x.drawImage(t, 0, 0); x.globalAlpha = 1; }
       give(t); continue;
     }

@@ -22,6 +22,8 @@ function cloneLayer(l: Layer): Layer {
   if (l.fill) c.fill = JSON.parse(JSON.stringify(l.fill));
   if (l.adj) c.adj = JSON.parse(JSON.stringify(l.adj));
   if (l.smart) c.smart = { ...l.smart, quad: l.smart.quad.map((p) => ({ ...p })) as any, filters: l.smart.filters.map((f) => ({ ...f, params: JSON.parse(JSON.stringify(f.params)) })) };
+  if (l.artboard) c.artboard = { ...l.artboard };
+  if (l.vmask) c.vmask = JSON.parse(JSON.stringify(l.vmask));
   if (l.children) c.children = l.children.map(cloneLayer);
   return c;
 }
@@ -155,7 +157,9 @@ export class Doc {
   addLayer(l: Layer, above?: string | null) {
     const ref = above === undefined ? this.s.activeId : above;
     const p = ref ? this.parentOf(ref) : null;
-    if (p) {
+    const refL = ref ? this.find(ref) : null;
+    if (refL?.artboard && l.kind !== 'group') refL.children!.push(l); // new layers go inside the active artboard
+    else if (p) {
       p.list.splice(p.index + 1, 0, l);
     } else this.s.layers.push(l);
     this.setActive(l.id);

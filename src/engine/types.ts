@@ -97,6 +97,8 @@ export interface Layer {
   styles?: LayerStyles; stylesOn?: boolean;
   text?: TextData; shape?: ShapeData; fill?: FillData; adj?: Adjustment; smart?: SmartData;
   children?: Layer[]; collapsed?: boolean;
+  artboard?: { x: number; y: number; w: number; h: number; bg: string | null };
+  vmask?: { path: VectorPath; enabled: boolean; feather: number; density: number };
   color?: string; // layer colour tag
   linkId?: string;
   ver: number;
