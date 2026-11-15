@@ -230,9 +230,10 @@ function TextEditor({ d, id, api, onDone }: { d: Doc; id: string; api: ViewApi; 
   return (
     <textarea ref={ref} className="text-editor" value={t.text} placeholder="Type here"
       style={{ left: p.x, top: p.y, minWidth: Math.max(60, (t.boxWidth || b.w) * z + 20), minHeight: Math.max(t.size * z * 1.3, b.h * z + 8), font: `${t.italic ? 'italic ' : ''}${t.weight} ${t.size * z}px ${t.font}`, lineHeight: (t.leading || t.size * 1.2) * z + 'px', textAlign: t.align === 'justify' ? 'left' : t.align, transform: t.align === 'center' && !t.boxWidth ? 'translateX(0)' : undefined }}
-      onChange={(e) => { t.text = e.target.value; l.name = e.target.value.split('\n')[0].slice(0, 40) || 'Text'; l.ver++; d.touch(); app.emit(); }}
+      onSelect={(e) => { const el = e.target as HTMLTextAreaElement; (window as any).__textSel = { id, start: el.selectionStart, end: el.selectionEnd }; app.emit(); }}
+      onChange={(e) => { t.runs = V.shiftRuns(t.runs, t.text, e.target.value); t.text = e.target.value; l.name = e.target.value.split('\n')[0].slice(0, 40) || 'Text'; l.ver++; d.touch(); app.emit(); }}
       onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) { if (!t.text.trim()) { d.removeLayer(id); } onDone(); } }}
-      onBlur={() => { if (!t.text.trim()) d.removeLayer(id); onDone(); }} />
+      onBlur={(e) => { if ((e.relatedTarget as HTMLElement)?.closest?.('.dock, .sheet, .optionsbar')) { /* keep the selection for the Character panel */ } if (!t.text.trim()) d.removeLayer(id); onDone(); }} />
   );
 }
 

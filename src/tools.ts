@@ -854,14 +854,29 @@ const anchorTool: Handler = {
 };
 
 // ---------- type ----------
+let pendingPathText: any = null;
 const typeTool: Handler = {
   down(d, e, v) {
     const hit = flatLayers(d.layers).reverse().find((l) => l.kind === 'text' && l.visible && (() => { const b = V.textBounds(l.text!); return e.p.x >= b.x && e.p.x <= b.x + b.w && e.p.y >= b.y && e.p.y <= b.y + b.h; })());
     if (hit && !app.tool.includes('mask')) { d.setActive(hit.id); v.editText(hit.id); return; }
+    // clicking on a path starts type on that path
+    if (!app.tool.includes('mask') && !app.tool.includes('vertical')) {
+      const s = v.toScreen(e.p);
+      for (const ep of editablePaths(d)) {
+        const sp = ep.path.subpaths[0]; if (!sp || sp.points.length < 2) continue; const n = sp.points.length, m = sp.closed ? n : n - 1; let best = Infinity, offset = 0, len = 0, tot = 0; let prev: Pt | null = null;
+        for (let k = 0; k < m; k++) { const a = sp.points[k], b = sp.points[(k + 1) % n]; for (let j = 0; j <= 20; j++) { const u = j / 20, w = 1 - u; const q = { x: w * w * w * a.x + 3 * w * w * u * a.ox + 3 * w * u * u * b.ix + u * u * u * b.x, y: w * w * w * a.y + 3 * w * w * u * a.oy + 3 * w * u * u * b.iy + u * u * u * b.y }; if (prev) tot += Math.hypot(q.x - prev.x, q.y - prev.y); prev = q; const qs = v.toScreen(q), dd = Math.hypot(qs.x - s.x, qs.y - s.y); if (dd < best) { best = dd; len = tot; } } }
+        offset = tot ? (len / tot) * 100 : 0;
+        if (best < 8) {
+          const o = app.opts; const text = V.defaultText(0, 0, { font: o.font, size: o.fontSize, weight: o.fontWeight, italic: o.italic, align: 'left', color: app.fg, antialias: o.antialiasText, text: '', path: JSON.parse(JSON.stringify(ep.path)), pathOffset: Math.round(offset) });
+          pendingPathText = text; return; // created on pointer up so the editor keeps focus
+        }
+      }
+    }
     ts.drag = e.p; ts.cur = e.p;
   },
   move(_d, e, v) { if (ts.drag) { ts.cur = e.p; v.overlay(); } },
   up(d, e, v) {
+    if (pendingPathText) { const l = newLayer('text', 'Text on Path', { text: pendingPathText }); pendingPathText = null; d.addLayer(l); d.touch(); app.emit(); v.editText(l.id); return; }
     if (!ts.drag) return; const a = ts.drag; ts.drag = null; const box = Math.abs(e.p.x - a.x) > 10 ? rectFromPts(a, e.p) : null; ts.cur = null;
     const o = app.opts, vertical = app.tool.includes('vertical');
     const text = V.defaultText(box ? box.x : a.x, box ? box.y : a.y, { font: o.font, size: o.fontSize, weight: o.fontWeight, italic: o.italic, align: o.textAlign, color: app.fg, vertical, boxWidth: box ? box.w : 0, antialias: o.antialiasText, text: '' });

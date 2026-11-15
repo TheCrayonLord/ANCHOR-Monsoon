@@ -148,9 +148,87 @@ export function layoutText(x: CanvasRenderingContext2D, t: TextData): { lines: s
   }
   return { lines, widths: lines.map((l) => x.measureText(l).width), lineH };
 }
+// ---- rich text (character styles and type on a path) ----
+export const isRich = (t: TextData) => !!(t.runs && t.runs.length) || !!t.path;
+interface Glyph { ch: string; x: number; y: number; w: number; font: string; color: string; size: number; underline: boolean; strike: boolean; rot?: number }
+function styleAt(t: TextData, i: number) {
+  let s = { color: t.color, size: t.size, weight: t.faux.bold ? 700 : t.weight, italic: t.italic || t.faux.italic, underline: t.underline, strike: t.strike, font: t.font, baseline: t.baseline, tracking: t.tracking };
+  for (const r of t.runs || []) if (i >= r.start && i < r.end) s = { ...s, ...Object.fromEntries(Object.entries(r).filter(([k, v]) => v !== undefined && k !== 'start' && k !== 'end')) } as any;
+  return s;
+}
+const measureCtx = () => document.createElement('canvas').getContext('2d')!;
+/** Positions every character in layer space (before the layer matrix). */
+export function layoutRich(t: TextData): { glyphs: Glyph[]; bounds: Rect } {
+  const x = measureCtx(); const text = t.caps === 'all' ? t.text.toUpperCase() : t.text; const sx = t.scaleX / 100;
+  const chars = [...text].map((ch, i) => { const s = styleAt(t, i); const font = `${s.italic ? 'italic ' : ''}${s.weight} ${s.size}px ${s.font}`; x.font = font; return { ch, s, font, w: (x.measureText(ch).width + (s.tracking / 1000) * s.size) * sx }; });
+  const glyphs: Glyph[] = [];
+  if (t.path) {
+    // flatten the path into a polyline with cumulative lengths
+    const pts: Pt[] = [];
+    for (const sp of t.path.subpaths) { const n = sp.points.length, m = sp.closed ? n : n - 1; for (let k = 0; k < m; k++) { const a = sp.points[k], b = sp.points[(k + 1) % n]; for (let j = 0; j <= 24; j++) { const u = j / 24, v = 1 - u; pts.push({ x: v * v * v * a.x + 3 * v * v * u * a.ox + 3 * v * u * u * b.ix + u * u * u * b.x, y: v * v * v * a.y + 3 * v * v * u * a.oy + 3 * v * u * u * b.iy + u * u * u * b.y }); } } break; }
+    const L = [0]; for (let k = 1; k < pts.length; k++) L.push(L[k - 1] + Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y));
+    const total = L[L.length - 1] || 1, width = chars.reduce((a, c) => a + c.w, 0);
+    let s0 = (t.pathOffset || 0) / 100 * total; if (t.align === 'center') s0 += (total - width) / 2; else if (t.align === 'right') s0 += total - width;
+    const at = (s: number) => { let k = 1; while (k < L.length - 1 && L[k] < s) k++; const a = pts[k - 1], b = pts[k], f = (s - L[k - 1]) / Math.max(1e-6, L[k] - L[k - 1]); return { p: { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f }, ang: Math.atan2(b.y - a.y, b.x - a.x) }; };
+    let cur = s0;
+    for (const c of chars) { const mid = cur + c.w / 2; cur += c.w; if (mid < 0 || mid > total || c.ch === '\n') continue; const { p, ang } = at(mid); const off = -c.s.baseline; glyphs.push({ ch: c.ch, x: p.x - Math.sin(ang) * off, y: p.y + Math.cos(ang) * off, w: c.w, font: c.font, color: c.s.color, size: c.s.size, underline: c.s.underline, strike: c.s.strike, rot: ang }); }
+  } else {
+    // break into lines (paragraph breaks and box wrapping)
+    const lines: (typeof chars)[] = []; let line: typeof chars = [], lw = 0, lastSpace = -1;
+    for (const c of chars) {
+      if (c.ch === '\n') { lines.push(line); line = []; lw = 0; lastSpace = -1; continue; }
+      line.push(c); lw += c.w; if (c.ch === ' ') lastSpace = line.length - 1;
+      if (t.boxWidth > 0 && lw > t.boxWidth && lastSpace > 0) { const rest = line.splice(lastSpace + 1); line.pop(); lines.push(line); line = rest; lw = rest.reduce((a, r) => a + r.w, 0); lastSpace = -1; }
+    }
+    lines.push(line);
+    let y = t.y;
+    lines.forEach((ln, li) => {
+      const maxSize = Math.max(t.size, ...ln.map((c) => c.s.size)), lh = t.leading > 0 ? t.leading : maxSize * 1.2;
+      if (li > 0 || t.boxWidth > 0) y += li === 0 ? maxSize : lh;
+      const w = ln.reduce((a, c) => a + c.w, 0);
+      let cx = t.x + (t.indent || 0);
+      if (t.boxWidth > 0) { if (t.align === 'center') cx = t.x + (t.boxWidth - w) / 2; else if (t.align === 'right') cx = t.x + t.boxWidth - w; }
+      else { if (t.align === 'center') cx = t.x - w / 2; else if (t.align === 'right') cx = t.x - w; }
+      for (const c of ln) { glyphs.push({ ch: c.ch, x: cx, y: y - c.s.baseline, w: c.w, font: c.font, color: c.s.color, size: c.s.size, underline: c.s.underline, strike: c.s.strike }); cx += c.w; }
+    });
+  }
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const g of glyphs) { const r = g.rot ? g.size : 0; x0 = Math.min(x0, g.x - r); x1 = Math.max(x1, g.x + g.w + r); y0 = Math.min(y0, g.y - g.size - r); y1 = Math.max(y1, g.y + g.size * 0.3 + r); }
+  if (!glyphs.length) { x0 = t.x; y0 = t.y - t.size; x1 = t.x + 10; y1 = t.y; }
+  return { glyphs, bounds: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } };
+}
+function drawRich(x: CanvasRenderingContext2D, t: TextData) {
+  const { glyphs } = layoutRich(t); const sy = t.scaleY / 100, sx = t.scaleX / 100;
+  x.textBaseline = 'alphabetic';
+  for (const g of glyphs) {
+    x.font = g.font; x.fillStyle = g.color; x.save(); x.translate(g.x, g.y);
+    if (g.rot !== undefined) { x.rotate(g.rot); x.scale(sx, sy); x.textAlign = 'center'; x.fillText(g.ch, 0, 0); }
+    else { x.scale(sx, sy); x.textAlign = 'left'; x.fillText(g.ch, 0, 0); const w = g.w / sx; if (g.underline) x.fillRect(0, g.size * 0.12, w, Math.max(1, g.size / 16)); if (g.strike) x.fillRect(0, -g.size * 0.3, w, Math.max(1, g.size / 16)); }
+    x.restore();
+  }
+}
+/** Keep character styles attached to the right letters after the text is edited. */
+export function shiftRuns(runs: TextData['runs'], before: string, after: string): TextData['runs'] {
+  if (!runs || !runs.length || before === after) return runs;
+  let p = 0; while (p < before.length && p < after.length && before[p] === after[p]) p++;
+  let s = 0; while (s < before.length - p && s < after.length - p && before[before.length - 1 - s] === after[after.length - 1 - s]) s++;
+  const oldEnd = before.length - s, delta = after.length - before.length;
+  const map = (i: number) => (i <= p ? i : i >= oldEnd ? i + delta : p + Math.max(0, Math.min(after.length - s - p, i - p)));
+  return runs.map((r) => ({ ...r, start: map(r.start), end: r.end > p && r.end <= oldEnd && delta > 0 ? r.end + delta : map(r.end) })).filter((r) => r.end > r.start);
+}
+/** Apply a style to a character range, splitting existing runs so later styles win. */
+export function styleRange(t: TextData, start: number, end: number, style: Partial<TextData['runs'] extends (infer R)[] | undefined ? R : never>) {
+  const runs = (t.runs || []).flatMap((r) => { if (r.end <= start || r.start >= end) return [r]; const out = []; if (r.start < start) out.push({ ...r, end: start }); out.push({ ...r, start: Math.max(r.start, start), end: Math.min(r.end, end), ...style }); if (r.end > end) out.push({ ...r, start: end }); return out; });
+  // parts of the range not covered by a run get a new run
+  const covered = runs.filter((r) => r.start < end && r.end > start).sort((a, b) => a.start - b.start); let c = start; const add = [];
+  for (const r of covered) { if (r.start > c) add.push({ start: c, end: r.start, ...style }); c = Math.max(c, r.end); }
+  if (c < end) add.push({ start: c, end, ...style });
+  t.runs = [...runs, ...add].sort((a, b) => a.start - b.start);
+}
 /** Draw a text layer into a context in document space. */
 export function drawText(x: CanvasRenderingContext2D, t: TextData) {
   x.save();
+  if (isRich(t)) { x.setTransform(x.getTransform().multiply(new DOMMatrix([...t.matrix]))); if (!t.antialias) x.imageSmoothingEnabled = false; drawRich(x, t); x.restore(); return; }
   const m = x.getTransform().multiply(new DOMMatrix([...t.matrix]));
   x.setTransform(m);
   const { lines, widths, lineH } = layoutText(x, t);
@@ -200,6 +278,7 @@ export function drawText(x: CanvasRenderingContext2D, t: TextData) {
   x.restore();
 }
 export function textBounds(t: TextData): Rect {
+  if (isRich(t)) { const b = layoutRich(t).bounds; const m = new DOMMatrix([...t.matrix]); const pts = [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]].map(([a, c]) => m.transformPoint(new DOMPoint(a, c))); const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y); return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) }; }
   const c = document.createElement('canvas').getContext('2d')!;
   const { lines, widths, lineH } = layoutText(c, t);
   const w = t.boxWidth > 0 ? t.boxWidth : Math.max(1, ...widths) * t.scaleX / 100;

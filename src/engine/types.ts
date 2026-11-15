@@ -49,7 +49,10 @@ export interface LayerStyles {
   bevel?: StyleBevel; satin?: StyleSatin;
 }
 
+export interface TextRun { start: number; end: number; color?: string; size?: number; weight?: number; italic?: boolean; underline?: boolean; strike?: boolean; font?: string; baseline?: number; tracking?: number }
 export interface TextData {
+  runs?: TextRun[]; // character ranges with their own style
+  path?: VectorPath; pathOffset?: number; // type on a path
   text: string; x: number; y: number;
   font: string; size: number; weight: number; italic: boolean; color: string;
   align: 'left' | 'center' | 'right' | 'justify'; leading: number; tracking: number;

@@ -19,6 +19,7 @@ import { getComposite } from './View';
 import { clearCaches } from '../engine/render';
 import { selectTool } from './Toolbar';
 import * as I from 'lucide-react';
+import * as V from '../engine/vector';
 
 const thumbs = new Map<string, { key: string; url: string }>();
 function thumb(d: Doc, l: Layer, mask = false): string {
@@ -273,19 +274,26 @@ function DocProps({ d }: { d: Doc }) {
 }
 function TextProps({ d, l, upd }: { d: Doc; l: Layer; upd: (f: () => void, label: string) => void }) {
   const t = l.text!; void d;
+  const sel = (window as any).__textSel; const ranged = !!sel && sel.id === l.id && sel.end > sel.start && sel.end <= t.text.length;
+  const cur = ranged ? { ...t, ...Object.fromEntries(Object.entries((t.runs || []).find((r) => r.start <= sel.start && r.end > sel.start) || {}).filter(([k]) => k !== 'start' && k !== 'end')) } as typeof t : t;
+  const setS = (k: string, v: any) => { if (ranged) V.styleRange(t, sel.start, sel.end, { [k]: v }); else (t as any)[k] = v; };
   return (<><h4>Type</h4>
-    <Select value={t.font} options={[...FONTS.map((f) => [f, f.split(',')[0]] as [string, string]), ...(FONTS.includes(t.font) ? [] : [[t.font, t.font.split(',')[0]] as [string, string]])]} onChange={(v) => upd(() => { t.font = v; }, 'Font')} />
-    <div className="row"><Select value={t.weight} options={[[100, 'Thin'], [300, 'Light'], [400, 'Regular'], [500, 'Medium'], [600, 'Semibold'], [700, 'Bold'], [900, 'Black']]} onChange={(v) => upd(() => { t.weight = v; }, 'Font Weight')} /><Check label="Italic" value={t.italic} onChange={(v) => upd(() => { t.italic = v; }, 'Italic')} /><ColorChip value={t.color} onChange={(v) => upd(() => { t.color = v; }, 'Text Color')} /></div>
-    <div className="row"><Num label="Size" value={+t.size.toFixed(1)} min={1} max={4000} onChange={(v) => upd(() => { t.size = v; }, 'Font Size')} unit="px" /><Num label="Leading" value={t.leading} min={0} max={4000} onChange={(v) => upd(() => { t.leading = v; }, 'Leading')} /></div>
-    <div className="row"><Num label="Tracking" value={t.tracking} min={-1000} max={10000} step={10} onChange={(v) => upd(() => { t.tracking = v; }, 'Tracking')} /><Num label="Baseline" value={t.baseline} min={-1000} max={1000} onChange={(v) => upd(() => { t.baseline = v; }, 'Baseline Shift')} /></div>
+    {ranged && <div className="banner">Styling characters {sel.start + 1}–{sel.end}: “{t.text.slice(sel.start, sel.end).slice(0, 24)}” <button className="btn sm" onClick={() => { (window as any).__textSel = null; app.emit(); }}>Whole layer</button></div>}
+    {!ranged && <p className="muted small">Tip: select letters while editing the text to style only those letters.</p>}
+    {t.path && <><Slider label="Path offset" value={t.pathOffset || 0} min={-100} max={100} unit="%" onChange={(v) => upd(() => { t.pathOffset = v; }, 'Path Offset')} /></>}
+    {(t.runs?.length || 0) > 0 && <button className="btn sm" onClick={() => upd(() => { t.runs = []; }, 'Clear Character Styles')}>Clear character styles</button>}
+    <Select value={cur.font} options={[...FONTS.map((f) => [f, f.split(',')[0]] as [string, string]), ...(FONTS.includes(cur.font) ? [] : [[cur.font, cur.font.split(',')[0]] as [string, string]])]} onChange={(v) => upd(() => setS('font', v), 'Font')} />
+    <div className="row"><Select value={cur.weight} options={[[100, 'Thin'], [300, 'Light'], [400, 'Regular'], [500, 'Medium'], [600, 'Semibold'], [700, 'Bold'], [900, 'Black']]} onChange={(v) => upd(() => setS('weight', v), 'Font Weight')} /><Check label="Italic" value={cur.italic} onChange={(v) => upd(() => setS('italic', v), 'Italic')} /><ColorChip value={cur.color} onChange={(v) => upd(() => setS('color', v), 'Text Color')} /></div>
+    <div className="row"><Num label="Size" value={+cur.size.toFixed(1)} min={1} max={4000} onChange={(v) => upd(() => setS('size', v), 'Font Size')} unit="px" /><Num label="Leading" value={t.leading} min={0} max={4000} onChange={(v) => upd(() => { t.leading = v; }, 'Leading')} /></div>
+    <div className="row"><Num label="Tracking" value={cur.tracking} min={-1000} max={10000} step={10} onChange={(v) => upd(() => setS('tracking', v), 'Tracking')} /><Num label="Baseline" value={cur.baseline} min={-1000} max={1000} onChange={(v) => upd(() => setS('baseline', v), 'Baseline Shift')} /></div>
     <div className="row"><Num label="Scale H" value={t.scaleX} min={1} max={1000} onChange={(v) => upd(() => { t.scaleX = v; }, 'Scale')} unit="%" /><Num label="Scale V" value={t.scaleY} min={1} max={1000} onChange={(v) => upd(() => { t.scaleY = v; }, 'Scale')} unit="%" /></div>
     <div className="row">
       <Seg value={t.align} onChange={(v) => upd(() => { t.align = v; }, 'Align')} options={[['left', <I.AlignLeft size={13} />], ['center', <I.AlignCenter size={13} />], ['right', <I.AlignRight size={13} />], ['justify', <I.AlignJustify size={13} />]]} />
       <button className={'icon-btn' + (t.faux.bold ? ' on' : '')} title="Faux bold" onClick={() => upd(() => { t.faux.bold = !t.faux.bold; }, 'Faux Bold')}><I.Bold size={13} /></button>
       <button className={'icon-btn' + (t.faux.italic ? ' on' : '')} title="Faux italic" onClick={() => upd(() => { t.faux.italic = !t.faux.italic; }, 'Faux Italic')}><I.Italic size={13} /></button>
       <button className={'icon-btn' + (t.caps === 'all' ? ' on' : '')} title="All caps" onClick={() => upd(() => { t.caps = t.caps === 'all' ? 'none' : 'all'; }, 'All Caps')}><I.CaseUpper size={13} /></button>
-      <button className={'icon-btn' + (t.underline ? ' on' : '')} title="Underline" onClick={() => upd(() => { t.underline = !t.underline; }, 'Underline')}><I.Underline size={13} /></button>
-      <button className={'icon-btn' + (t.strike ? ' on' : '')} title="Strikethrough" onClick={() => upd(() => { t.strike = !t.strike; }, 'Strikethrough')}><I.Strikethrough size={13} /></button>
+      <button className={'icon-btn' + (cur.underline ? ' on' : '')} title="Underline" onClick={() => upd(() => setS('underline', !t.underline), 'Underline')}><I.Underline size={13} /></button>
+      <button className={'icon-btn' + (cur.strike ? ' on' : '')} title="Strikethrough" onClick={() => upd(() => setS('strike', !t.strike), 'Strikethrough')}><I.Strikethrough size={13} /></button>
     </div>
     <div className="row"><Num label="Indent" value={t.indent} min={0} max={2000} onChange={(v) => upd(() => { t.indent = v; }, 'Indent')} /><Num label="Box width" value={t.boxWidth} min={0} max={20000} onChange={(v) => upd(() => { t.boxWidth = v; }, 'Paragraph Box')} /></div>
     <div className="row"><Check label="Vertical" value={t.vertical} onChange={(v) => upd(() => { t.vertical = v; }, 'Orientation')} /><Check label="Anti-alias" value={t.antialias} onChange={(v) => upd(() => { t.antialias = v; }, 'Anti-alias')} /><button className="btn sm" onClick={() => app.openDialog('warpText')}>Warp…</button><button className="btn sm" onClick={() => { (window as any).__monsoonView?.editText(l.id); }}>Edit text</button></div>

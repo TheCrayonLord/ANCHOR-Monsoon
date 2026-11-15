@@ -351,3 +351,4 @@ h4:first-child { margin-top: 0; }
   input, select, textarea { font-size: 16px; } /* stops iOS zooming into fields */
   .slider .num { font-size: 13px; }
 }
+.banner { background: color-mix(in srgb, var(--accent) 22%, transparent); border: 1px solid var(--accent); border-radius: 6px; padding: 6px 8px; margin: 4px 0 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }

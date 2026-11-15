@@ -52,6 +52,26 @@ const only = process.argv[2];
     ok(await ev(() => !!window.__monsoon.doc.active.mask && !window.__monsoon.doc.active.vmask), 'vector mask rasterized to a layer mask');
     await p.screenshot({ path: 'tests/shots/gap-vmask.png' });
   }
+  if (!only || only === 'type') {
+    await ev(async () => { await window.__monsoonRun('new', { name: 'TY', w: 800, h: 500, bg: 'white' }); window.__monsoon.fg = '#000000'; });
+    await ev(() => { window.__monsoon.setTool('pen'); window.__monsoon.opts.shapeMode = 'path'; });
+    const pts = [[100, 400], [400, 120], [700, 400]];
+    for (const [x, y] of pts) { const s = await toScreen(x, y); await p.mouse.click(s.x, s.y); }
+    await p.keyboard.press('Enter');
+    await ev(() => { window.__monsoon.setTool('type'); window.__monsoon.opts.fontSize = 40; });
+    const s = await toScreen(250, 260); await p.mouse.click(s.x, s.y);
+    await p.keyboard.type('Rain falls on the harbour'); await p.keyboard.press('Escape');
+    const tp = await ev(() => { const l = window.__monsoon.doc.layers.find((l) => l.kind === 'text'); return l ? { path: !!l.text.path, text: l.text.text, off: l.text.pathOffset } : null; });
+    ok(tp && tp.path && tp.text.length > 10, 'type on a path created by clicking the path ' + JSON.stringify(tp));
+    await ev(async () => { const a = window.__monsoon, d = a.doc; await window.__monsoonRun('selectAll'); await window.__monsoonRun('deselect'); });
+    // styled range on a normal text layer
+    await ev(async () => { const a = window.__monsoon, d = a.doc; const V = window.__monsoonVector; const t = V.defaultText(80, 120, { text: 'Big and small', size: 40 }); const l = { ...window.__monsoonNewLayer('text', 'T', { text: t }) }; d.addLayer(l); V.styleRange(l.text, 0, 3, { size: 90, color: '#ff0000' }); l.ver++; d.commit('t'); a.emit(); });
+    const red = await ev(() => { const { flatten } = window.__monsoonRender; const f = flatten(window.__monsoon.doc).getContext('2d').getImageData(80, 40, 160, 85).data; let n = 0; for (let i = 0; i < f.length; i += 4) if (f[i] > 200 && f[i + 1] < 60) n++; return n; });
+    ok(red > 300, 'character range drawn with its own size and colour (' + red + ' red pixels)');
+    const sh = await ev(() => JSON.stringify(window.__monsoonVector.shiftRuns([{ start: 4, end: 7, size: 9 }], 'abc defg', 'abcXX defg')));
+    ok(sh.includes('"start":6') && sh.includes('"end":9'), 'styles move with the text when it is edited ' + sh);
+    await p.screenshot({ path: 'tests/shots/gap-type.png' });
+  }
   globalThis.__extra && await globalThis.__extra(p, ev, ok, toScreen, drag, px);
   console.log(errs.length ? 'ERRORS:\n' + errs.join('\n') : 'no page errors');
   console.log(fails.length ? fails.length + ' FAILED' : 'ALL PASSED');

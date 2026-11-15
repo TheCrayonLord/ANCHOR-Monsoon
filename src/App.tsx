@@ -139,4 +139,6 @@ import { ADJ_TYPES } from './cmds';
 import { ADJ_DEFAULTS } from './engine/adjust';
 import * as IO from './engine/io';
 import * as RENDER from './engine/render';
-Object.assign(window as any, { __monsoonRender: RENDER, __monsoonFilters: { FILTERS, defaults: filterDefaults }, __monsoonAdj: ADJ_TYPES, __monsoonAdjDefaults: ADJ_DEFAULTS, __monsoonIO: IO });
+import * as VECTOR from './engine/vector';
+import { newLayer as newLayerFn } from './engine/doc';
+Object.assign(window as any, { __monsoonRender: RENDER, __monsoonVector: VECTOR, __monsoonNewLayer: newLayerFn, __monsoonFilters: { FILTERS, defaults: filterDefaults }, __monsoonAdj: ADJ_TYPES, __monsoonAdjDefaults: ADJ_DEFAULTS, __monsoonIO: IO });
