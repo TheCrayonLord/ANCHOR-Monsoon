@@ -66,7 +66,7 @@ const SHEETS: [string, string, React.ReactNode, string[]][] = [
   ['props', 'Adjust', <I.SlidersHorizontal size={18} />, ['properties', 'adjustments', 'styles']],
   ['color', 'Color', <I.Palette size={18} />, ['color', 'swatches', 'gradients', 'patterns', 'shapes']],
   ['brush', 'Brush', <I.Brush size={18} />, ['brushes']],
-  ['history', 'History', <I.History size={18} />, ['history', 'actions', 'comps']],
+  ['history', 'History', <I.History size={18} />, ['history', 'actions', 'comps', 'timeline']],
 ];
 function PhoneBar() {
   const m = app.mobilePanel;

@@ -38,7 +38,7 @@ export function cloneState(s: DocState): DocState {
     ...s, layers: s.layers.map(cloneLayer), selectedIds: [...s.selectedIds],
     paths: s.paths.map((p) => ({ ...p, path: JSON.parse(JSON.stringify(p.path)) })), channels: s.channels.map((c) => ({ ...c })),
     guides: s.guides.map((g) => ({ ...g })), notes: s.notes.map((n) => ({ ...n })), samplers: s.samplers.map((p) => ({ ...p })), counts: s.counts.map((p) => ({ ...p })),
-    comps: JSON.parse(JSON.stringify(s.comps)),
+    comps: JSON.parse(JSON.stringify(s.comps)), frames: s.frames ? JSON.parse(JSON.stringify(s.frames)) : undefined,
   };
 }
 function freezeState(s: DocState) {

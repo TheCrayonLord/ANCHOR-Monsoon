@@ -124,7 +124,9 @@ export interface DocState {
   guides: Guide[]; notes: Note[]; samplers: Sampler[]; counts: Pt[];
   mode: ColorMode; resolution: number;
   comps: LayerComp[];
+  frames?: AnimFrame[]; frameIndex?: number; animLoop?: number;
 }
+export interface AnimFrame { id: string; delay: number; layers: Record<string, { visible: boolean; opacity: number; x: number; y: number }> }
 export interface LayerComp { id: string; name: string; layers: Record<string, { visible: boolean; x: number; y: number; opacity: number; stylesOn?: boolean }> }
 
 export interface HistoryState { id: number; label: string; state: DocState; thumb?: string }

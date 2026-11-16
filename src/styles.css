@@ -352,3 +352,14 @@ h4:first-child { margin-top: 0; }
   .slider .num { font-size: 13px; }
 }
 .banner { background: color-mix(in srgb, var(--accent) 22%, transparent); border: 1px solid var(--accent); border-radius: 6px; padding: 6px 8px; margin: 4px 0 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* timeline */
+.timeline { display: flex; flex-direction: column; gap: 6px; }
+.timeline .frames { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+.timeline .frame { flex: none; width: 84px; border: 1px solid var(--line, #33374d); border-radius: 6px; padding: 4px; display: flex; flex-direction: column; gap: 3px; cursor: pointer; position: relative; background: rgba(255,255,255,0.02); }
+.timeline .frame.on { border-color: var(--accent, #6c7cff); box-shadow: 0 0 0 1px var(--accent, #6c7cff) inset; }
+.timeline .frame img, .timeline .fph { width: 100%; height: 54px; object-fit: contain; background: repeating-conic-gradient(#3a3d52 0 25%, #2c2f42 0 50%) 0 0 / 10px 10px; border-radius: 3px; }
+.timeline .fnum { position: absolute; top: 6px; left: 8px; font-size: 10px; background: rgba(0,0,0,0.6); color: #fff; padding: 0 4px; border-radius: 3px; }
+.timeline .frame select { font-size: 11px; width: 100%; }
+.timeline .tl-controls { flex-wrap: wrap; gap: 4px; }
+.timeline input.tiny { width: 44px; }

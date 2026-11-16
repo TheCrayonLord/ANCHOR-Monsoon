@@ -115,6 +115,37 @@ const only = process.argv[2];
     await p.screenshot({ path: 'tests/shots/gap-cas.png' });
     await ev(() => window.__monsoon.closeDialog());
   }
+  if (!only || only === 'anim') {
+    await ev(async () => { await window.__monsoonRun('new', { name: 'Anim', w: 200, h: 120, bg: 'white' });
+      const a = window.__monsoon; for (const col of ['#f00', '#00f']) { await window.__monsoonRun('newLayer'); const d = a.doc, l = d.active; const x = d.editable(l).getContext('2d'); x.fillStyle = col; x.fillRect(20, 30, 50, 50); l.ver++; d.commit('paint'); }
+      a.panelsOpen.timeline = true; a.emit(); });
+    await p.waitForSelector('[data-panel="timeline"]');
+    await p.click('text=Make Frames From Layers');
+    let st = await ev(() => { const d = window.__monsoon.doc; return { n: d.s.frames?.length, vis: d.layers.map((l) => l.visible) }; });
+    ok(st.n === 2 && st.vis.join() === 'true,true,false', 'frames made from layers ' + JSON.stringify(st));
+    // frame 2: move the blue layer right, then tween from frame 1
+    await p.locator('.timeline .frame').nth(1).click();
+    await ev(async () => { const d = window.__monsoon.doc; const l = d.layers[2]; l.x += 100; l.ver++; d.commit('Move'); window.__monsoon.emit(); });
+    await p.locator('.timeline .frame').nth(0).click();
+    await ev(() => window.__monsoonRun('animFrames', { op: 'tween', count: 3 }));
+    st = await ev(() => { const d = window.__monsoon.doc; return { n: d.s.frames.length, xs: d.s.frames.map((f) => f.layers[d.layers[2].id].x), op: d.s.frames.map((f) => Math.round(f.layers[d.layers[2].id].opacity * 100) / 100) }; });
+    ok(st.n === 5 && st.xs[4] === 100 && st.xs[2] > 30 && st.xs[2] < 80, 'tween adds in-between positions ' + JSON.stringify(st));
+    ok(await p.locator('.timeline .frame img').count() === 5, 'frame thumbnails drawn');
+    await ev(() => window.__monsoonRun('animFrames', { op: 'delay', ms: 200 }));
+    const g = await ev(async () => { const b = await window.__monsoonAnim.renderGif(0); const buf = new Uint8Array(await b.arrayBuffer()); const head = String.fromCharCode(...buf.slice(0, 6)); let frames = -1, dur = 0; try { const dec = new ImageDecoder({ data: buf, type: 'image/gif' }); await dec.tracks.ready; frames = dec.tracks.selectedTrack.frameCount; const f = await dec.decode({ frameIndex: 4 }); dur = f.image.duration; } catch (e) { frames = 'err ' + e.message; } return { head, size: buf.length, frames, dur }; });
+    ok(g.head === 'GIF89a' && g.frames === 5, 'animated GIF has 5 frames ' + JSON.stringify(g));
+    const keep = await ev(async () => { const io = window.__monsoonIO; const n = await io.saveNative(window.__monsoon.doc); const d2 = await io.openNative(await n.arrayBuffer(), 'x'); return d2.s.frames?.length; });
+    ok(keep === 5, 'frames survive save and reopen');
+    await p.screenshot({ path: 'tests/shots/gap-anim.png' });
+    // phone sheet
+    const pp = await b.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    await pp.goto(URL); await pp.waitForSelector('.welcome');
+    await pp.evaluate(async () => { await window.__monsoonRun('new', { name: 'P', w: 300, h: 300, bg: 'white' }); await window.__monsoonRun('animFrames', { op: 'create' }); await window.__monsoonRun('animFrames', { op: 'add' }); window.__monsoon.mobilePanel = 'history'; window.__monsoon.emit(); });
+    await pp.waitForTimeout(500);
+    const ov = await pp.evaluate(() => ({ frames: document.querySelectorAll('.sheet .timeline .frame').length, over: document.documentElement.scrollWidth > window.innerWidth }));
+    ok(ov.frames === 2 && !ov.over, 'timeline shows in the phone History sheet ' + JSON.stringify(ov));
+    await pp.screenshot({ path: 'tests/shots/gap-anim-phone.png' }); await pp.close();
+  }
   globalThis.__extra && await globalThis.__extra(p, ev, ok, toScreen, drag, px);
   console.log(errs.length ? 'ERRORS:\n' + errs.join('\n') : 'no page errors');
   console.log(fails.length ? fails.length + ' FAILED' : 'ALL PASSED');

@@ -20,6 +20,7 @@ import { clearCaches } from '../engine/render';
 import { selectTool } from './Toolbar';
 import * as I from 'lucide-react';
 import * as V from '../engine/vector';
+import { TimelinePanel } from './Timeline';
 
 const thumbs = new Map<string, { key: string; url: string }>();
 function thumb(d: Doc, l: Layer, mask = false): string {
@@ -415,6 +416,7 @@ export function Dock({ only }: { only?: string[] } = {}) {
       {any('character', 'paragraph') && <Panel id="character" title="Character & Paragraph">{d?.active?.text ? <TextProps d={d} l={d.active} upd={(f, label) => { f(); d.active!.ver++; d.touch(); app.emit(); d.commit(label); }} /> : <p className="muted">Select a type layer to edit its character and paragraph settings.</p>}</Panel>}
       {any('properties', 'adjustments', 'styles') && (() => { const tabs = ([['properties', 'Properties'], ['adjustments', 'Adjustments'], ['styles', 'Styles']] as [string, string][]).filter(([k]) => o[k]); const t = tabs.find(([k]) => k === tabOf('prop', ''))?.[0] || tabs[0][0]; return <Panel id="prop" tabs={tabs}>{t === 'adjustments' ? <AdjustmentsPanel /> : t === 'styles' ? <StylesPanel /> : d ? <PropertiesPanel d={d} /> : noDoc}</Panel>; })()}
       {any('layers', 'channels', 'paths') && (() => { const tabs = ([['layers', 'Layers'], ['channels', 'Channels'], ['paths', 'Paths']] as [string, string][]).filter(([k]) => o[k] || k !== 'layers' && o.layers); const t = tabs.find(([k]) => k === tabOf('lay', ''))?.[0] || tabs[0][0]; return <Panel id="lay" tabs={tabs}>{!d ? noDoc : t === 'channels' ? <ChannelsPanel d={d} /> : t === 'paths' ? <PathsPanel d={d} /> : <LayersPanel d={d} />}</Panel>; })()}
+      {any('timeline') && <Panel id="timeline" title="Timeline">{d ? <TimelinePanel d={d} /> : noDoc}</Panel>}
       {any('history', 'actions', 'comps') && (() => { const tabs = ([['history', 'History'], ['actions', 'Actions'], ['comps', 'Layer Comps']] as [string, string][]).filter(([k]) => o[k] || k !== 'history' && o.history); const t = tabs.find(([k]) => k === tabOf('his', ''))?.[0] || tabs[0][0]; return <Panel id="his" tabs={tabs}>{t === 'actions' ? <ActionsPanel /> : !d ? noDoc : t === 'comps' ? <CompsPanel d={d} /> : <HistoryPanel d={d} />}</Panel>; })()}
     </aside>
   );
