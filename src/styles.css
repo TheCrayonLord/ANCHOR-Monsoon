@@ -363,3 +363,7 @@ h4:first-child { margin-top: 0; }
 .timeline .frame select { font-size: 11px; width: 100%; }
 .timeline .tl-controls { flex-wrap: wrap; gap: 4px; }
 .timeline input.tiny { width: 44px; }
+
+.toast.busy { display: flex; flex-direction: column; gap: 6px; min-width: 240px; }
+.toast.busy .bar { height: 4px; background: rgba(255,255,255,0.15); border-radius: 2px; overflow: hidden; }
+.toast.busy .bar i { display: block; height: 100%; background: var(--accent); transition: width 0.2s; }

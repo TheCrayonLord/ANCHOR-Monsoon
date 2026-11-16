@@ -261,13 +261,27 @@ const objectSelect: Handler = {
   up(d, e) {
     const a = ts.drag!; ts.drag = null; const r = rectIntersect(rectFromPts(a, e.p), { x: 0, y: 0, w: d.w, h: d.h });
     if (!r || r.w < 8 || r.h < 8) { void run('selectSubject'); return; }
-    const img = ctx2d(flatten(d)).getImageData(Math.round(r.x), Math.round(r.y), Math.round(r.w), Math.round(r.h));
-    const m = Sel.selectSubject(img), shape = Sel.blankMask(d.w, d.h); ctx2d(shape).drawImage(Sel.writeChannel(m, img.width, img.height), Math.round(r.x), Math.round(r.y));
-    applySelection(d, Sel.featherMask(shape, 1), selOpFrom(e), 'Object Selection');
+    const op = selOpFrom(e), rx = Math.round(r.x), ry = Math.round(r.y), rw = Math.round(r.w), rh = Math.round(r.h);
+    if (app.prefs.aiSubject !== false) {
+      // pad the box a little so the model sees the object's edges, then keep only what is inside the box
+      const pad = Math.round(Math.max(rw, rh) * 0.08), bx = Math.max(0, rx - pad), by = Math.max(0, ry - pad), bw = Math.min(d.w, rx + rw + pad) - bx, bh = Math.min(d.h, ry + rh + pad) - by;
+      const crop = makeCanvas(bw, bh); ctx2d(crop).drawImage(flatten(d), -bx, -by);
+      void import('./engine/ai').then((AI) => AI.subjectMask(crop, (text, frac) => app.setBusy({ text, frac }))).then((m) => {
+        app.setBusy(null); const shape = Sel.blankMask(d.w, d.h), sx = ctx2d(shape); sx.save(); sx.beginPath(); sx.rect(rx, ry, rw, rh); sx.clip(); sx.drawImage(m, bx, by); sx.restore();
+        applySelection(d, shape, op, 'Object Selection');
+      }).catch((err) => { app.setBusy(null); app.toast((err?.message || 'The AI model could not run.') + ' Using quick selection instead.', 'error'); quickObject(d, rx, ry, rw, rh, op); });
+      return;
+    }
+    quickObject(d, rx, ry, rw, rh, op);
   },
   overlay: (x, d, v) => marquee.overlay!(x, d, v),
   cursor: () => 'crosshair',
 };
+function quickObject(d: Doc, rx: number, ry: number, rw: number, rh: number, op: any) {
+    const img = ctx2d(flatten(d)).getImageData(rx, ry, rw, rh);
+    const m = Sel.selectSubject(img), shape = Sel.blankMask(d.w, d.h); ctx2d(shape).drawImage(Sel.writeChannel(m, img.width, img.height), rx, ry);
+    applySelection(d, Sel.featherMask(shape, 1), op, 'Object Selection');
+}
 
 // ---------- move ----------
 function pickLayerAt(d: Doc, p: Pt): Layer | null {

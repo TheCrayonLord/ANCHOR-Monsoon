@@ -601,7 +601,25 @@ def('grow', (similar?: boolean) => {
 def('colorRange', (a: { mode: string; colors: [number, number, number][]; fuzz: number; invert: boolean }) => {
   const d = requireDoc(); const img = getData(flatten(d)); setSel(d, Sel.writeChannel(Sel.colorRange(img, a.mode, a.colors, a.fuzz, a.invert), d.w, d.h), 'Color Range');
 });
-def('selectSubject', () => { const d = requireDoc(); const img = getData(flatten(d)); setSel(d, Sel.featherMask(Sel.writeChannel(Sel.selectSubject(img), d.w, d.h), 1.5), 'Select Subject'); });
+def('selectSubject', async (a?: { quick?: boolean }) => {
+  const d = requireDoc();
+  if (!a?.quick && app.prefs?.aiSubject !== false) {
+    try {
+      const AI = await import('./engine/ai');
+      const m = await AI.subjectMask(flatten(d), (text, frac) => app.setBusy({ text, frac }));
+      app.setBusy(null); setSel(d, m, 'Select Subject'); return;
+    } catch (e: any) { app.setBusy(null); app.toast((e?.message || 'The AI model could not run.') + ' Using quick selection instead.', 'error'); }
+  }
+  const img = getData(flatten(d)); setSel(d, Sel.featherMask(Sel.writeChannel(Sel.selectSubject(img), d.w, d.h), 1.5), 'Select Subject');
+});
+def('removeBackground', async () => {
+  const d = requireDoc(); const l = d.active;
+  if (!l || l.kind === 'group' || l.kind === 'adjustment') { app.toast('Select a picture layer first.'); return false; }
+  const saved = d.s.selection; await commands.selectSubject();
+  if (!d.s.selection) { d.s.selection = saved; app.toast('No subject was found.'); return false; }
+  if (l.locks.all || l.locks.position || l.name === 'Background') { l.locks = { ...l.locks, all: false, position: false, pixels: false }; }
+  await commands.mask('revealSel'); d.s.selection = saved; d.commit('Remove Background'); app.emit();
+});
 def('selectSky', () => { const d = requireDoc(); const img = getData(flatten(d)); setSel(d, Sel.featherMask(Sel.writeChannel(Sel.selectSky(img), d.w, d.h), 2), 'Select Sky'); });
 def('selectLayerPixels', (id?: string) => {
   const d = requireDoc(); const l = id ? d.find(id) : d.active; if (!l) return false;

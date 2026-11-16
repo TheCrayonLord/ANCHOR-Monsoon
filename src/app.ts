@@ -96,7 +96,7 @@ class AppState {
   cloneSource: { x: number; y: number; docId: string } | null = null;
   historySource: number | null = null; // history state id for history brush
   version = 0;
-  prefs = { historyStates: 50, autosaveMinutes: 2, theme: 'dark' as 'dark' | 'light' | 'storm', units: 'px' as 'px' | 'in' | 'cm', interfaceScale: 1, checker: 'medium' as 'small' | 'medium' | 'large' | 'none' };
+  prefs = { historyStates: 50, autosaveMinutes: 2, theme: 'dark' as 'dark' | 'light' | 'storm', units: 'px' as 'px' | 'in' | 'cm', interfaceScale: 1, checker: 'medium' as 'small' | 'medium' | 'large' | 'none', aiSubject: true };
   panelsOpen: Record<string, boolean> = { layers: true, properties: true, color: true, history: true };
   mobilePanel: string | null = null;
   private listeners = new Set<Listener>();
@@ -113,6 +113,8 @@ class AppState {
     this.emit();
   }
   setTool(t: ToolId) { this.tool = t; this.emit(); }
+  busy: { text: string; frac: number } | null = null;
+  setBusy(b: { text: string; frac: number } | null) { this.busy = b; this.emit(); }
   toast(text: string, kind: 'info' | 'error' = 'info') {
     const id = Date.now() + Math.random(); this.toasts.push({ id, text, kind }); this.emit();
     setTimeout(() => { this.toasts = this.toasts.filter((t) => t.id !== id); this.emit(); }, kind === 'error' ? 6000 : 3200);

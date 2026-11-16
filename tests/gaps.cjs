@@ -132,7 +132,7 @@ const only = process.argv[2];
     ok(st.n === 5 && st.xs[4] === 100 && st.xs[2] > 30 && st.xs[2] < 80, 'tween adds in-between positions ' + JSON.stringify(st));
     ok(await p.locator('.timeline .frame img').count() === 5, 'frame thumbnails drawn');
     await ev(() => window.__monsoonRun('animFrames', { op: 'delay', ms: 200 }));
-    const g = await ev(async () => { const b = await window.__monsoonAnim.renderGif(0); const buf = new Uint8Array(await b.arrayBuffer()); const head = String.fromCharCode(...buf.slice(0, 6)); let frames = -1, dur = 0; try { const dec = new ImageDecoder({ data: buf, type: 'image/gif' }); await dec.tracks.ready; frames = dec.tracks.selectedTrack.frameCount; const f = await dec.decode({ frameIndex: 4 }); dur = f.image.duration; } catch (e) { frames = 'err ' + e.message; } return { head, size: buf.length, frames, dur }; });
+    const g = await ev(async () => { const b = await window.__monsoonAnim.renderGif(0); const buf = new Uint8Array(await b.arrayBuffer()); const head = String.fromCharCode(...buf.slice(0, 6)); let frames = -1, dur = 0; try { const dec = new ImageDecoder({ data: buf, type: 'image/gif' }); await dec.tracks.ready; frames = dec.tracks.selectedTrack.frameCount; const f = await dec.decode({ frameIndex: 4 }); dur = f.image.duration; f.image.close(); dec.close(); } catch (e) { frames = 'err ' + e.message; } return { head, size: buf.length, frames, dur }; });
     ok(g.head === 'GIF89a' && g.frames === 5, 'animated GIF has 5 frames ' + JSON.stringify(g));
     const keep = await ev(async () => { const io = window.__monsoonIO; const n = await io.saveNative(window.__monsoon.doc); const d2 = await io.openNative(await n.arrayBuffer(), 'x'); return d2.s.frames?.length; });
     ok(keep === 5, 'frames survive save and reopen');
@@ -145,6 +145,24 @@ const only = process.argv[2];
     const ov = await pp.evaluate(() => ({ frames: document.querySelectorAll('.sheet .timeline .frame').length, over: document.documentElement.scrollWidth > window.innerWidth }));
     ok(ov.frames === 2 && !ov.over, 'timeline shows in the phone History sheet ' + JSON.stringify(ov));
     await pp.screenshot({ path: 'tests/shots/gap-anim-phone.png' }); await pp.close();
+  }
+  if (!only || only === 'ai') {
+    await ev(async () => { await window.__monsoonRun('new', { name: 'AI', w: 640, h: 480, bg: 'white' });
+      const a = window.__monsoon, d = a.doc, l = d.layers[0]; const x = d.editable(l).getContext('2d');
+      const g = x.createLinearGradient(0, 0, 0, 480); g.addColorStop(0, '#9cc7e8'); g.addColorStop(0.6, '#d9e6c8'); g.addColorStop(1, '#7a9a5a'); x.fillStyle = g; x.fillRect(0, 0, 640, 480);
+      x.fillStyle = '#c0392b'; x.beginPath(); x.ellipse(320, 230, 110, 140, 0, 0, 7); x.fill(); x.fillStyle = '#7b241c'; x.beginPath(); x.ellipse(290, 190, 30, 40, 0, 0, 7); x.fill(); x.fillStyle = '#3d2b1f'; x.fillRect(305, 360, 30, 90);
+      l.ver++; d.commit('scene'); a.emit(); });
+    const t0 = Date.now();
+    await ev(() => window.__monsoonRun('selectSubject'));
+    const ms = Date.now() - t0;
+    const r = await ev(() => { const d = window.__monsoon.doc, s = d.s.selection; if (!s) return null; const g = s.getContext('2d'); const v = (x, y) => g.getImageData(x, y, 1, 1).data[0]; return { center: v(320, 230), corner: v(20, 20), ground: v(600, 450), label: d.history[d.hIndex].label }; });
+    ok(r && r.center > 200 && r.corner < 40 && r.ground < 60, 'AI Select Subject finds the object ' + JSON.stringify(r) + ' in ' + ms + ' ms');
+    const cached = await ev(async () => { const c = await caches.open('anchor-monsoon-ai'); return (await c.keys()).map((k) => k.url.split('/').pop()); });
+    ok(cached.includes('subject-v1.onnx'), 'model saved for offline use ' + JSON.stringify(cached));
+    await ev(async () => { await window.__monsoonRun('deselect'); await window.__monsoonRun('removeBackground'); });
+    const rb = await ev(() => { const { flatten } = window.__monsoonRender; const d = window.__monsoon.doc; const f = flatten(d).getContext('2d'); return { mask: !!d.active.mask, c: Array.from(f.getImageData(320, 230, 1, 1).data), k: Array.from(f.getImageData(20, 20, 1, 1).data) }; });
+    ok(rb.mask && rb.c[3] > 200 && rb.k[3] < 40, 'Remove Background masks out the background ' + JSON.stringify(rb));
+    await p.screenshot({ path: 'tests/shots/gap-ai.png' });
   }
   globalThis.__extra && await globalThis.__extra(p, ev, ok, toScreen, drag, px);
   console.log(errs.length ? 'ERRORS:\n' + errs.join('\n') : 'no page errors');

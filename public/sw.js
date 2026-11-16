@@ -12,6 +12,11 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== location.origin) return; // fonts and other sites go straight to the network
+  if (url.pathname.includes('/models/')) return; // the AI model is cached by the app itself
+  if (url.pathname.includes('/ort/')) { // AI runtime: keep it across app updates
+    e.respondWith(caches.open('anchor-monsoon-ai').then((c) => c.match(req).then((hit) => hit || fetch(req).then((res) => { if (res.ok) c.put(req, res.clone()); return res; }))));
+    return;
+  }
   e.respondWith(
     caches.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req).then((res) => {
       if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }

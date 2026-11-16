@@ -58,7 +58,7 @@ function StatusBar() {
 }
 
 function Toasts() {
-  return <div className="toasts" aria-live="polite">{app.toasts.map((t) => <div key={t.id} className={'toast ' + (t.kind || '')}>{t.text}</div>)}</div>;
+  return <div className="toasts" aria-live="polite">{app.busy && <div className="toast busy" role="status"><span>{app.busy.text}{app.busy.frac > 0 && app.busy.frac < 1 ? ` ${Math.round(app.busy.frac * 100)}%` : '…'}</span><div className="bar"><i style={{ width: `${Math.round((app.busy.frac || 0) * 100)}%` }} /></div></div>}{app.toasts.map((t) => <div key={t.id} className={'toast ' + (t.kind || '')}>{t.text}</div>)}</div>;
 }
 
 const SHEETS: [string, string, React.ReactNode, string[]][] = [

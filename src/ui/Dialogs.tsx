@@ -187,6 +187,7 @@ function PrefsDialog() {
     <Slider label="History states" value={p.historyStates} min={5} max={200} onChange={(v) => setP({ ...p, historyStates: v })} />
     <Slider label="Auto-save recovery every" value={p.autosaveMinutes} min={0} max={30} unit="min" onChange={(v) => setP({ ...p, autosaveMinutes: v })} />
     <Select label="Rulers" value={p.units} options={[['px', 'Pixels'], ['in', 'Inches'], ['cm', 'Centimeters']]} onChange={(v) => setP({ ...p, units: v })} />
+    <Check label="Use on-device AI for Select Subject, Object Selection and Remove Background" value={p.aiSubject !== false} onChange={(v) => setP({ ...p, aiSubject: v })} />
     <Select label="Transparency grid" value={p.checker} options={[['small', 'Small'], ['medium', 'Medium'], ['large', 'Large'], ['none', 'None']]} onChange={(v) => setP({ ...p, checker: v })} />
     <Check label="Scrubby sliders" value={app.opts.scrubby} onChange={(v) => { app.opts.scrubby = v; app.emit(); }} />
   </Modal>;
