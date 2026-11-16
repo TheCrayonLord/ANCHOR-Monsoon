@@ -35,7 +35,6 @@ Everything runs on the device. Monsoon has no server and uploads nothing.
 | 27 blend modes plus pass-through | Done | Native canvas ops where possible, otherwise per-pixel |
 | Opacity and fill opacity | Done | |
 | Layer masks: paint, invert, density, feather, disable, apply, view alone | Done | |
-| Vector masks | Missing | Use shape layers or pixel masks |
 | Clipping masks | Done | |
 | Layer styles: drop and inner shadow, outer and inner glow, stroke, colour/gradient/pattern overlay, bevel and emboss, satin | Done | Bevel uses a height-map approximation |
 | Copy, paste and clear styles; style presets | Done | 7 original presets |
@@ -46,7 +45,8 @@ Everything runs on the device. Monsoon has no server and uploads nothing.
 | Smart filters with toggle, edit and delete | Done | Opacity and blend for each filter is stored but not editable in the UI |
 | Layer comps | Done | Visibility, position, opacity |
 | Align and distribute | Done | |
-| Artboards | Missing | Tool slot exists and acts as Move |
+| Artboards: tool, presets, background, move with contents, export each artboard | Done | |
+| Vector masks: from a path, reveal all, enable, feather, density, rasterize | Done | |
 
 ## Selections
 | Feature | Status | Notes |
@@ -54,8 +54,10 @@ Everything runs on the device. Monsoon has no server and uploads nothing.
 | Rectangular, elliptical, single row/column marquee; fixed ratio or size | Done | |
 | Lasso, polygonal lasso, magnetic lasso | Done | Magnetic snaps to the strongest nearby edge |
 | Magic wand, contiguous or global, sample all layers | Done | |
-| Quick Selection, Object Selection | Done | Region growing and colour clustering, not AI |
-| Select Subject, Select Sky | Partial | Heuristic (border colour clustering and thresholds), not a neural network |
+| Quick Selection | Done | Region growing |
+| Object Selection | Done | On-device AI inside the box you drag, with a quick non-AI fallback |
+| Select Subject and Remove Background | Done | On-device AI model (about 46 MB, downloaded once from the app's own site, then offline). Can be turned off in Preferences |
+| Select Sky | Partial | Heuristic, not a neural network |
 | Color Range (sampled colours, colour families, tones, skin) | Done | |
 | Select and Mask: smooth, feather, contrast, shift edge, output to selection, mask or layer | Partial | No refine-edge brush |
 | Modify: expand, contract, feather, border, smooth; grow, similar | Done | |
@@ -79,9 +81,10 @@ Everything runs on the device. Monsoon has no server and uploads nothing.
 | Feature | Status | Notes |
 |---|---|---|
 | Point and paragraph type, vertical type, type mask | Done | |
-| Font, weight, size, leading, tracking, baseline, scale, faux styles, caps, underline, strike, alignment, indent | Done | One style per layer; no per-character styling |
+| Font, weight, size, leading, tracking, baseline, scale, faux styles, caps, underline, strike, alignment, indent | Done | |
+| Mixed character styles in one text layer (size, colour, weight, italic, underline, strike, font, tracking, baseline) | Done | Select characters while editing, then change them in the Character panel |
 | Warp text (arc, arch, bulge, flag, wave, rise) | Done | |
-| Type on a path | Missing | |
+| Type on a path | Done | Click a path with the Type tool; Path offset slider |
 | Pen, freeform pen, curvature pen, add/delete/convert anchor, path and direct selection | Done | |
 | Rectangle (rounded), ellipse, triangle, polygon and star, line with arrows, 16 original custom shapes | Done | |
 | Live shape fill (colour, gradient, pattern) and stroke (align, caps, joins, dashes) | Done | |
@@ -95,7 +98,9 @@ Everything runs on the device. Monsoon has no server and uploads nothing.
 | Crop with ratios, overlays, rotation, delete or keep pixels | Done | |
 | Perspective crop | Done | |
 | Image size with resampling, canvas size with anchor, rotate canvas, trim, reveal all | Done | |
-| Content-aware scale, puppet warp, perspective warp | Missing | |
+| Content-aware scale | Done | Seam carving, protect selection or skin tones, shrink or enlarge |
+| Puppet warp | Done | Rigid, normal and distort modes; add, drag and remove pins |
+| Perspective warp | Partial | One plane (layout then warp) with Straighten; no multiple joined planes |
 
 ## Adjustments and filters
 | Feature | Status | Notes |
@@ -108,7 +113,8 @@ Everything runs on the device. Monsoon has no server and uploads nothing.
 | Lens correction: distortion, chromatic aberration, vignette, perspective, angle, scale | Done | No lens profile database |
 | Fade last command | Done | |
 | Filter Gallery as one dialog | Partial | Filter dialogs let you switch between filters of the same family |
-| Vanishing point, 3D, video timeline, animation frames | Missing | |
+| Frame animation timeline: frames from layers, duplicate, tween, delays, looping, play, reverse, animated GIF export | Done | Frames store visibility, opacity and position |
+| Vanishing point, 3D, video timeline | Missing | |
 
 ## Colour
 | Feature | Status | Notes |
@@ -116,7 +122,7 @@ Everything runs on the device. Monsoon has no server and uploads nothing.
 | Colour picker (HSB, RGB, hex, web-safe, sample from screen where supported) | Done | |
 | Color panel (HSB, RGB, CMYK, Lab sliders), swatches | Done | |
 | Grayscale, indexed and duotone modes | Done | |
-| 16 and 32 bits per channel | Missing | 8-bit only |
+| 16 and 32 bits per channel | Missing | 8-bit only (skipped for now by choice) |
 | True CMYK and Lab documents, ICC profiles | Missing | CMYK proof view is a simulation |
 | Proof views (grayscale, CMYK, colour blindness) | Partial | Simulated |
 
@@ -124,7 +130,7 @@ Everything runs on the device. Monsoon has no server and uploads nothing.
 | Feature | Status | Notes |
 |---|---|---|
 | Menus with keyboard shortcuts close to the industry standard; searchable shortcut list | Done | |
-| Panels: Layers, Channels, Paths, History (snapshots), Properties, Adjustments, Styles, Color, Swatches, Gradients, Patterns, Shapes, Brushes, Character/Paragraph, Navigator, Histogram, Info, Actions, Layer Comps | Done | |
+| Panels: Layers, Channels, Paths, History (snapshots), Properties, Adjustments, Styles, Color, Swatches, Gradients, Patterns, Shapes, Brushes, Character/Paragraph, Navigator, Histogram, Info, Actions, Layer Comps, Timeline | Done | |
 | Workspaces (Essentials, Photography, Painting, Graphic and Web) | Done | |
 | Rulers, guides, guide layouts, grid, pixel grid, snapping | Done | |
 | Zoom, pan, rotate view, pinch zoom, screen modes | Done | |

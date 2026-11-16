@@ -8,11 +8,12 @@ It sits alongside ANCHOR Tsunami (PDF) and ANCHOR Abyss (photo library and raw).
 
 ## What it does
 
-- **Layers:** pixel, type, shape, fill, adjustment, group and smart object layers; 27 blend modes; masks; clipping; layer styles; comps.
-- **Selections:** every marquee and lasso, magic wand, quick and object selection, Select Subject and Sky, Color Range, Select and Mask, Quick Mask.
-- **Tools:** a full brush engine, clone and history brushes, healing, Remove, patch, content-aware fill and move, gradients, dodge and burn, pen and shape tools, and type.
-- **Adjustments and filters:** 16 adjustment types, about 61 filters, Liquify, lens correction and a Develop dialog, all with live preview.
+- **Layers:** pixel, type, shape, fill, adjustment, group and smart object layers; 27 blend modes; masks; clipping; layer styles; comps; artboards; vector masks.
+- **Selections:** every marquee and lasso, magic wand, quick selection, on-device AI Object Selection, Select Subject and Remove Background, Select Sky, Color Range, Select and Mask, Quick Mask.
+- **Tools:** a full brush engine, clone and history brushes, healing, Remove, patch, content-aware fill and move, gradients, dodge and burn, pen and shape tools, and type (including type on a path and mixed character styles).
+- **Adjustments and filters:** 16 adjustment types, about 61 filters, Liquify, lens correction and a Develop dialog, all with live preview. Puppet warp, perspective warp and content-aware scale.
 - **Files:** layered PSD in and out, TIFF and HEIC import, export to PDF and every common image format, plus the native `.monsoon` format.
+- **Animation:** a frame timeline with tweening that saves animated GIFs.
 - **Automation and safety:** recordable actions, batch processing and crash recovery.
 
 See [PLAN.md](PLAN.md) for the full feature list compared with Photoshop, including what is partial or missing.
@@ -45,6 +46,8 @@ Every push to `main` builds and deploys to GitHub Pages (`.github/workflows/page
 
 ## Stack
 
-Vite, React 18 and TypeScript, with a Canvas 2D engine written for this app. Libraries: ag-psd (PSD), utif (TIFF), heic2any (HEIC), gifenc (GIF), pdf-lib (PDF), jszip and lucide-react icons.
+Vite, React 18 and TypeScript, with a Canvas 2D engine written for this app. Libraries: ag-psd (PSD), utif (TIFF), heic2any (HEIC), gifenc (GIF), pdf-lib (PDF), jszip, lucide-react icons and onnxruntime-web (on-device AI).
+
+The subject model (`public/models/subject-v1.onnx`) is the ISNet general-use segmentation network (Apache-2.0), quantized to 8-bit for the web. It downloads once from the app's own site the first time you use Select Subject, Object Selection or Remove Background, then works offline. Images never leave the device.
 
 All names, icons, presets and artwork are original to ANCHOR Monsoon.
